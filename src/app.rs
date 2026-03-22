@@ -6,19 +6,21 @@ pub struct App {
     pub issues: Vec<Issue>,
     pub selected: usize,
     pub show_detail: bool,
+    pub dir: Option<String>,
 }
 
 impl App {
-    pub fn new() -> Self {
+    pub fn new(dir: Option<String>) -> Self {
         Self {
             issues: Vec::new(),
             selected: 0,
             show_detail: false,
+            dir,
         }
     }
 
     pub async fn load_issues(&mut self) -> Result<()> {
-        self.issues = bd::list_issues().await?;
+        self.issues = bd::list_issues(self.dir.as_deref()).await?;
         Ok(())
     }
 

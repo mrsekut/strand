@@ -14,9 +14,17 @@ pub struct Issue {
     pub description: Option<String>,
 }
 
-pub async fn list_issues() -> Result<Vec<Issue>> {
-    let output = Command::new("bd")
-        .args(["list", "--json"])
+fn bd_command(dir: Option<&str>) -> Command {
+    let mut cmd = Command::new("bd");
+    if let Some(d) = dir {
+        cmd.arg("--db").arg(format!("{d}/.beads/beads.db"));
+    }
+    cmd
+}
+
+pub async fn list_issues(dir: Option<&str>) -> Result<Vec<Issue>> {
+    let output = bd_command(dir)
+        .args(["list", "--json", "--limit", "0"])
         .output()
         .await?;
 
@@ -31,8 +39,8 @@ pub async fn list_issues() -> Result<Vec<Issue>> {
     Ok(issues)
 }
 
-pub async fn show_issue(id: &str) -> Result<Issue> {
-    let output = Command::new("bd")
+pub async fn show_issue(dir: Option<&str>, id: &str) -> Result<Issue> {
+    let output = bd_command(dir)
         .args(["show", id, "--json"])
         .output()
         .await?;

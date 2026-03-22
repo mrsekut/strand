@@ -5,16 +5,20 @@ mod ui;
 use anyhow::Result;
 use app::App;
 use crossterm::{
-    event::{self, Event, KeyCode},
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     ExecutableCommand,
+    event::{self, Event, KeyCode},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::prelude::*;
 use std::io::stdout;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut app = App::new();
+    let dir = std::env::args()
+        .position(|a| a == "--dir")
+        .and_then(|i| std::env::args().nth(i + 1));
+
+    let mut app = App::new(dir);
     app.load_issues().await?;
 
     enable_raw_mode()?;
@@ -29,7 +33,10 @@ async fn main() -> Result<()> {
     result
 }
 
-async fn run(terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>, app: &mut App) -> Result<()> {
+async fn run(
+    terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+    app: &mut App,
+) -> Result<()> {
     loop {
         terminal.draw(|frame| ui::draw(frame, app))?;
 
