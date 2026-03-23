@@ -56,6 +56,20 @@ pub async fn show_issue(dir: Option<&str>, id: &str) -> Result<Issue> {
     Ok(issue)
 }
 
+pub async fn update_title(dir: Option<&str>, id: &str, title: &str) -> Result<()> {
+    let output = bd_command(dir)
+        .args(["update", id, "--title", title])
+        .output()
+        .await?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "bd update title failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    Ok(())
+}
+
 pub async fn update_description(dir: Option<&str>, id: &str, description: &str) -> Result<()> {
     let output = bd_command(dir)
         .args(["update", id, "--description", description])

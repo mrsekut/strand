@@ -260,11 +260,13 @@ impl App {
             return;
         };
         let issue_id = issue.id.clone();
-        let current = issue.description.clone().unwrap_or_default();
+        let current_title = issue.title.clone();
+        let current_desc = issue.description.clone().unwrap_or_default();
 
-        // 一時ファイルに書き出し
+        // 一時ファイルに書き出し（1行目: title, 2行目: 空行, 3行目以降: description）
+        let content = format!("{}\n\n{}", current_title, current_desc);
         let tmp = std::env::temp_dir().join(format!("strand-{issue_id}.md"));
-        if std::fs::write(&tmp, &current).is_err() {
+        if std::fs::write(&tmp, &content).is_err() {
             self.notification = Some(("Failed to create temp file".into(), Instant::now()));
             return;
         }
@@ -284,22 +286,45 @@ impl App {
 
         match status {
             Ok(s) if s.success() => {
-                if let Ok(new_desc) = std::fs::read_to_string(&tmp) {
-                    let trimmed = new_desc.trim();
-                    if trimmed != current.trim() {
-                        match bd::update_description(self.dir.as_deref(), &issue_id, trimmed).await
-                        {
-                            Ok(_) => {
-                                self.notification = Some((
-                                    format!("Description updated: {issue_id}"),
-                                    Instant::now(),
-                                ));
-                                let _ = self.load_issues().await;
-                            }
-                            Err(e) => {
+                if let Ok(new_content) = std::fs::read_to_string(&tmp) {
+                    // 1行目: title, 2行目: 空行, 3行目以降: description
+                    let new_title = new_content.lines().next().unwrap_or("").trim().to_string();
+                    let new_desc = new_content
+                        .lines()
+                        .skip(1)
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                        .trim()
+                        .to_string();
+
+                    let title_changed = new_title != current_title.trim();
+                    let desc_changed = new_desc != current_desc.trim();
+
+                    if title_changed || desc_changed {
+                        let mut ok = true;
+                        if title_changed {
+                            if let Err(e) =
+                                bd::update_title(self.dir.as_deref(), &issue_id, &new_title).await
+                            {
                                 self.notification =
-                                    Some((format!("Update failed: {e}"), Instant::now()));
+                                    Some((format!("Title update failed: {e}"), Instant::now()));
+                                ok = false;
                             }
+                        }
+                        if desc_changed {
+                            if let Err(e) =
+                                bd::update_description(self.dir.as_deref(), &issue_id, &new_desc)
+                                    .await
+                            {
+                                self.notification =
+                                    Some((format!("Description update failed: {e}"), Instant::now()));
+                                ok = false;
+                            }
+                        }
+                        if ok {
+                            self.notification =
+                                Some((format!("Updated: {issue_id}"), Instant::now()));
+                            let _ = self.load_issues().await;
                         }
                     }
                 }
