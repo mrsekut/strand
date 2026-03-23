@@ -112,7 +112,7 @@ fn draw_list(frame: &mut Frame, app: &App) {
         .header(header)
         .block(
             Block::default()
-                .title(" strand - Issues (q:quit j/k:move Enter:detail e:enrich i:implement)")
+                .title(" strand - Issues (q:quit j/k:move Enter:detail c:copy e:enrich i:implement)")
                 .borders(Borders::ALL),
         )
         .row_highlight_style(Style::default().bg(Color::Rgb(70, 70, 90)))
@@ -208,9 +208,9 @@ fn draw_detail(frame: &mut Frame, app: &App) {
         .get(&issue.id)
         .is_some_and(|j| matches!(j.status, ImplStatus::Done))
     {
-        " Issue Detail (Enter:back q:quit e:edit m:merge d:discard) "
+        " Issue Detail (Enter:back q:quit c:copy e:edit m:merge d:discard) "
     } else {
-        " Issue Detail (Enter:back q:quit e:edit) "
+        " Issue Detail (Enter:back q:quit c:copy e:edit) "
     };
 
     let paragraph = Paragraph::new(lines)

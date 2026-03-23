@@ -58,6 +58,7 @@ async fn run(
                                 app.edit_description(terminal).await;
                             }
                             KeyCode::Char('e') => app.start_enrich(),
+                            KeyCode::Char('c') => app.copy_id(),
                             KeyCode::Char('i') => app.start_implement(),
                             KeyCode::Char('m') if app.show_detail => app.merge_impl().await,
                             KeyCode::Char('d') if app.show_detail => app.discard_impl().await,

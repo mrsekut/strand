@@ -250,6 +250,45 @@ impl App {
         self.notification = Some((format!("Discarded: {issue_id}"), Instant::now()));
     }
 
+    // --- Copy ID ---
+
+    pub fn copy_id(&mut self) {
+        let Some(issue) = self.selected_issue() else {
+            return;
+        };
+        let id = issue.id.clone();
+
+        let result = if cfg!(target_os = "macos") {
+            std::process::Command::new("pbcopy")
+                .stdin(std::process::Stdio::piped())
+                .spawn()
+                .and_then(|mut child| {
+                    use std::io::Write;
+                    child.stdin.as_mut().unwrap().write_all(id.as_bytes())?;
+                    child.wait()
+                })
+        } else {
+            std::process::Command::new("xclip")
+                .args(["-selection", "clipboard"])
+                .stdin(std::process::Stdio::piped())
+                .spawn()
+                .and_then(|mut child| {
+                    use std::io::Write;
+                    child.stdin.as_mut().unwrap().write_all(id.as_bytes())?;
+                    child.wait()
+                })
+        };
+
+        match result {
+            Ok(_) => {
+                self.notification = Some((format!("Copied: {id}"), Instant::now()));
+            }
+            Err(e) => {
+                self.notification = Some((format!("Copy failed: {e}"), Instant::now()));
+            }
+        }
+    }
+
     // --- Edit Description ---
 
     pub async fn edit_description(
