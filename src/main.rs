@@ -8,7 +8,7 @@ use std::io::stdout;
 use std::time::Duration;
 
 use anyhow::Result;
-use app::App;
+use app::{App, InputMode};
 use crossterm::{
     ExecutableCommand,
     event::{Event, EventStream, KeyCode},
@@ -53,20 +53,13 @@ async fn run(
             maybe_event = event_stream.next() => {
                 match maybe_event {
                     Some(Ok(Event::Key(key))) => {
-                        match key.code {
-                            KeyCode::Char('q') => break,
-                            KeyCode::Char('j') | KeyCode::Down => app.next(),
-                            KeyCode::Char('k') | KeyCode::Up => app.previous(),
-                            KeyCode::Enter => app.toggle_detail(),
-                            KeyCode::Char('e') if app.show_detail => {
-                                app.edit_description(terminal).await;
-                            }
-                            KeyCode::Char('e') => app.start_enrich(),
-                            KeyCode::Char('c') => app.copy_id(),
-                            KeyCode::Char('i') => app.start_implement(),
-                            KeyCode::Char('m') if app.show_detail => app.merge_impl().await,
-                            KeyCode::Char('d') if app.show_detail => app.discard_impl().await,
-                            _ => {}
+                        if key.code == KeyCode::Char('q') {
+                            break;
+                        }
+                        if app.show_detail {
+                            handle_detail_key(key.code, app, terminal).await;
+                        } else {
+                            handle_list_key(key.code, app);
                         }
                     }
                     Some(Ok(_)) => {} // リサイズ等のイベントは無視
@@ -88,4 +81,56 @@ async fn run(
         }
     }
     Ok(())
+}
+
+fn handle_list_key(key: KeyCode, app: &mut App) {
+    // AwaitingAI状態の処理
+    if app.input_mode == InputMode::AwaitingAI {
+        match key {
+            KeyCode::Char('e') => {
+                app.input_mode = InputMode::Normal;
+                app.notification = None;
+                app.start_enrich();
+            }
+            KeyCode::Char('i') => {
+                app.input_mode = InputMode::Normal;
+                app.notification = None;
+                app.start_implement();
+            }
+            _ => {
+                app.input_mode = InputMode::Normal;
+                app.notification = None;
+            }
+        }
+        return;
+    }
+
+    match key {
+        KeyCode::Down => app.next(),
+        KeyCode::Up => app.previous(),
+        KeyCode::Enter => app.open_detail(),
+        KeyCode::Char('c') => app.copy_id(),
+        KeyCode::Char('a') => {
+            app.input_mode = InputMode::AwaitingAI;
+            app.notification = Some(("a-...".into(), std::time::Instant::now()));
+        }
+        _ => {}
+    }
+}
+
+async fn handle_detail_key(
+    key: KeyCode,
+    app: &mut App,
+    terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+) {
+    match key {
+        KeyCode::Esc => app.back_to_list(),
+        KeyCode::Down => app.next(),
+        KeyCode::Up => app.previous(),
+        KeyCode::Char('c') => app.copy_id(),
+        KeyCode::Char('e') => app.edit_description(terminal).await,
+        KeyCode::Char('m') => app.merge_impl().await,
+        KeyCode::Char('d') => app.discard_impl().await,
+        _ => {}
+    }
 }

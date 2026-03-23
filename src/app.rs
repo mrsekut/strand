@@ -15,6 +15,12 @@ use crate::bd::{self, Issue};
 use crate::enrich::{self, EnrichEvent};
 use crate::implement::{self, ImplEvent, ImplJob, ImplStatus};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InputMode {
+    Normal,
+    AwaitingAI,
+}
+
 pub struct App {
     pub issues: Vec<Issue>,
     pub selected: usize,
@@ -28,6 +34,7 @@ pub struct App {
     pub impl_jobs: HashMap<String, ImplJob>,
     pub notification: Option<(String, Instant)>,
     pub last_db_mtime: Option<SystemTime>,
+    pub input_mode: InputMode,
 }
 
 impl App {
@@ -47,6 +54,7 @@ impl App {
             impl_jobs: HashMap::new(),
             notification: None,
             last_db_mtime: None,
+            input_mode: InputMode::Normal,
         }
     }
 
@@ -91,8 +99,12 @@ impl App {
         }
     }
 
-    pub fn toggle_detail(&mut self) {
-        self.show_detail = !self.show_detail;
+    pub fn open_detail(&mut self) {
+        self.show_detail = true;
+    }
+
+    pub fn back_to_list(&mut self) {
+        self.show_detail = false;
     }
 
     pub fn selected_issue(&self) -> Option<&Issue> {
@@ -381,8 +393,10 @@ impl App {
                                 bd::update_description(self.dir.as_deref(), &issue_id, &new_desc)
                                     .await
                             {
-                                self.notification =
-                                    Some((format!("Description update failed: {e}"), Instant::now()));
+                                self.notification = Some((
+                                    format!("Description update failed: {e}"),
+                                    Instant::now(),
+                                ));
                                 ok = false;
                             }
                         }
