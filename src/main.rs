@@ -4,6 +4,9 @@ mod enrich;
 mod implement;
 mod ui;
 
+use std::io::stdout;
+use std::time::Duration;
+
 use anyhow::Result;
 use app::App;
 use crossterm::{
@@ -13,7 +16,6 @@ use crossterm::{
 };
 use futures::StreamExt;
 use ratatui::prelude::*;
-use std::io::stdout;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -41,6 +43,8 @@ async fn run(
     app: &mut App,
 ) -> Result<()> {
     let mut event_stream = EventStream::new();
+    let mut poll_interval = tokio::time::interval(Duration::from_secs(2));
+    poll_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
     loop {
         terminal.draw(|frame| ui::draw(frame, app))?;
@@ -75,6 +79,11 @@ async fn run(
             }
             Some(event) = app.impl_rx.recv() => {
                 app.handle_impl_event(event);
+            }
+            _ = poll_interval.tick() => {
+                if app.has_db_changed() {
+                    let _ = app.load_issues().await;
+                }
             }
         }
     }

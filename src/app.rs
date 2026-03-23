@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::io::stdout;
 use std::path::PathBuf;
-use std::time::Instant;
+use std::time::{Instant, SystemTime};
 
 use anyhow::Result;
 use crossterm::ExecutableCommand;
@@ -27,6 +27,7 @@ pub struct App {
     pub impl_rx: mpsc::Receiver<ImplEvent>,
     pub impl_jobs: HashMap<String, ImplJob>,
     pub notification: Option<(String, Instant)>,
+    pub last_db_mtime: Option<SystemTime>,
 }
 
 impl App {
@@ -45,12 +46,37 @@ impl App {
             impl_rx,
             impl_jobs: HashMap::new(),
             notification: None,
+            last_db_mtime: None,
         }
     }
 
     pub async fn load_issues(&mut self) -> Result<()> {
         self.issues = bd::list_issues(self.dir.as_deref()).await?;
+        self.last_db_mtime = self.db_mtime();
         Ok(())
+    }
+
+    fn beads_db_path(&self) -> PathBuf {
+        let base = match &self.dir {
+            Some(d) => PathBuf::from(d),
+            None => std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+        };
+        base.join(".beads").join("beads.db")
+    }
+
+    fn db_mtime(&self) -> Option<SystemTime> {
+        std::fs::metadata(self.beads_db_path())
+            .and_then(|m| m.modified())
+            .ok()
+    }
+
+    pub fn has_db_changed(&self) -> bool {
+        let current = self.db_mtime();
+        match (&self.last_db_mtime, &current) {
+            (Some(last), Some(now)) => now > last,
+            (None, Some(_)) => true,
+            _ => false,
+        }
     }
 
     pub fn next(&mut self) {
