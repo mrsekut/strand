@@ -45,17 +45,25 @@ async fn run(
         terminal.draw(|frame| ui::draw(frame, app))?;
 
         tokio::select! {
-            Some(Ok(Event::Key(key))) = event_stream.next() => {
-                match key.code {
-                    KeyCode::Char('q') => break,
-                    KeyCode::Char('j') | KeyCode::Down => app.next(),
-                    KeyCode::Char('k') | KeyCode::Up => app.previous(),
-                    KeyCode::Enter => app.toggle_detail(),
-                    _ => {}
+            maybe_event = event_stream.next() => {
+                match maybe_event {
+                    Some(Ok(Event::Key(key))) => {
+                        match key.code {
+                            KeyCode::Char('q') => break,
+                            KeyCode::Char('j') | KeyCode::Down => app.next(),
+                            KeyCode::Char('k') | KeyCode::Up => app.previous(),
+                            KeyCode::Enter => app.toggle_detail(),
+                            KeyCode::Char('e') => app.start_enrich(),
+                            _ => {}
+                        }
+                    }
+                    Some(Ok(_)) => {} // リサイズ等のイベントは無視
+                    Some(Err(_)) => break,
+                    None => break,
                 }
             }
-            Some(_event) = app.enrich_rx.recv() => {
-                // 後のPRで処理を追加
+            Some(event) = app.enrich_rx.recv() => {
+                app.handle_enrich_event(event);
             }
         }
     }

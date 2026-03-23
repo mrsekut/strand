@@ -14,13 +14,23 @@ pub fn draw(frame: &mut Frame, app: &App) {
 }
 
 fn draw_list(frame: &mut Frame, app: &App) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(1), Constraint::Length(1)])
+        .split(frame.area());
+
     let items: Vec<ListItem> = app
         .issues
         .iter()
         .map(|issue| {
+            let enriching = if app.enriching_ids.contains(&issue.id) {
+                "[*] "
+            } else {
+                ""
+            };
             let priority = issue.priority.map(|p| format!("P{p}")).unwrap_or_default();
             let line = format!(
-                "{} [{}] {} {}",
+                "{enriching}{} [{}] {} {}",
                 issue.id, issue.status, priority, issue.title
             );
             ListItem::new(line)
@@ -30,7 +40,7 @@ fn draw_list(frame: &mut Frame, app: &App) {
     let list = List::new(items)
         .block(
             Block::default()
-                .title(" bdtui - Issues (q:quit j/k:move Enter:detail) ")
+                .title(" bdtui - Issues (q:quit j/k:move Enter:detail e:enrich) ")
                 .borders(Borders::ALL),
         )
         .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
@@ -39,13 +49,20 @@ fn draw_list(frame: &mut Frame, app: &App) {
     let mut state = ListState::default();
     state.select(Some(app.selected));
 
-    frame.render_stateful_widget(list, frame.area(), &mut state);
+    frame.render_stateful_widget(list, chunks[0], &mut state);
+
+    draw_notification(frame, app, chunks[1]);
 }
 
 fn draw_detail(frame: &mut Frame, app: &App) {
     let Some(issue) = app.selected_issue() else {
         return;
     };
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(1), Constraint::Length(1)])
+        .split(frame.area());
 
     let priority = issue
         .priority
@@ -69,5 +86,16 @@ fn draw_detail(frame: &mut Frame, app: &App) {
         )
         .wrap(Wrap { trim: false });
 
-    frame.render_widget(paragraph, frame.area());
+    frame.render_widget(paragraph, chunks[0]);
+
+    draw_notification(frame, app, chunks[1]);
+}
+
+fn draw_notification(frame: &mut Frame, app: &App, area: Rect) {
+    if let Some((msg, time)) = &app.notification {
+        if time.elapsed().as_secs() < 5 {
+            let status = Paragraph::new(msg.as_str()).style(Style::default().fg(Color::Yellow));
+            frame.render_widget(status, area);
+        }
+    }
 }

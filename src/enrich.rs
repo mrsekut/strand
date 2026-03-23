@@ -80,8 +80,18 @@ pub fn format_design(solutions: &[Solution]) -> String {
         .iter()
         .enumerate()
         .map(|(i, s)| {
-            let pros = s.pros.iter().map(|p| format!("- {p}")).collect::<Vec<_>>().join("\n");
-            let cons = s.cons.iter().map(|c| format!("- {c}")).collect::<Vec<_>>().join("\n");
+            let pros = s
+                .pros
+                .iter()
+                .map(|p| format!("- {p}"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            let cons = s
+                .cons
+                .iter()
+                .map(|c| format!("- {c}"))
+                .collect::<Vec<_>>()
+                .join("\n");
             format!(
                 "## Solution {num}: {title}\n{desc}\n\n**Pros:**\n{pros}\n\n**Cons:**\n{cons}",
                 num = i + 1,
@@ -148,8 +158,10 @@ async fn run_inner(request: &EnrichRequest, dir: Option<&str>) -> Result<()> {
     let stdout = String::from_utf8(output.stdout)?;
     let enrich_result = parse_result(&stdout)?;
 
-    let description =
-        format_description(request.description.as_deref(), &enrich_result.enriched_description);
+    let description = format_description(
+        request.description.as_deref(),
+        &enrich_result.enriched_description,
+    );
     let design = format_design(&enrich_result.solutions);
 
     bd::update_description(dir, &request.issue_id, &description).await?;
