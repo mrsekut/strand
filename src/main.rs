@@ -63,7 +63,7 @@ async fn run(
                 }
             }
             Some(event) = app.enrich_rx.recv() => {
-                app.handle_enrich_event(event);
+                app.handle_enrich_event(event).await;
             }
         }
     }

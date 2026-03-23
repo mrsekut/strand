@@ -85,7 +85,7 @@ impl App {
         });
     }
 
-    pub fn handle_enrich_event(&mut self, event: EnrichEvent) {
+    pub async fn handle_enrich_event(&mut self, event: EnrichEvent) {
         match event {
             EnrichEvent::Started { issue_id } => {
                 self.notification = Some((format!("Enriching: {issue_id}..."), Instant::now()));
@@ -93,6 +93,8 @@ impl App {
             EnrichEvent::Completed { issue_id } => {
                 self.enriching_ids.remove(&issue_id);
                 self.notification = Some((format!("Enriched: {issue_id}"), Instant::now()));
+                // 書き戻された内容を反映するためissue一覧を再読み込み
+                let _ = self.load_issues().await;
             }
             EnrichEvent::Failed { issue_id, error } => {
                 self.enriching_ids.remove(&issue_id);

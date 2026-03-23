@@ -63,8 +63,16 @@ Output only valid JSON, no markdown fences or extra text."#,
     )
 }
 
+/// claude -p --output-format json のラッパー構造
+#[derive(Debug, Deserialize)]
+struct ClaudeResponse {
+    result: String,
+}
+
 pub fn parse_result(json_str: &str) -> Result<EnrichResult> {
-    let result: EnrichResult = serde_json::from_str(json_str)?;
+    // claude --output-format json はラッパーJSONを返す。.resultフィールドに実際の出力がある
+    let wrapper: ClaudeResponse = serde_json::from_str(json_str)?;
+    let result: EnrichResult = serde_json::from_str(&wrapper.result)?;
     Ok(result)
 }
 
@@ -202,18 +210,10 @@ mod tests {
 
     #[test]
     fn parse_result_valid_json() {
-        let json = r#"{
-            "enriched_description": "This is enriched",
-            "solutions": [
-                {
-                    "title": "Solution A",
-                    "description": "Do A",
-                    "pros": ["fast"],
-                    "cons": ["complex"]
-                }
-            ]
-        }"#;
-        let result = parse_result(json).unwrap();
+        // claude -p --output-format json のラッパー形式
+        let inner = r#"{"enriched_description":"This is enriched","solutions":[{"title":"Solution A","description":"Do A","pros":["fast"],"cons":["complex"]}]}"#;
+        let json = format!(r#"{{"type":"result","result":{}}}"#, serde_json::to_string(inner).unwrap());
+        let result = parse_result(&json).unwrap();
         assert_eq!(result.enriched_description, "This is enriched");
         assert_eq!(result.solutions.len(), 1);
         assert_eq!(result.solutions[0].title, "Solution A");
