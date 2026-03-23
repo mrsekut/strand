@@ -54,6 +54,9 @@ async fn run(
                             KeyCode::Char('j') | KeyCode::Down => app.next(),
                             KeyCode::Char('k') | KeyCode::Up => app.previous(),
                             KeyCode::Enter => app.toggle_detail(),
+                            KeyCode::Char('e') if app.show_detail => {
+                                app.edit_description(terminal).await;
+                            }
                             KeyCode::Char('e') => app.start_enrich(),
                             KeyCode::Char('i') => app.start_implement(),
                             KeyCode::Char('m') if app.show_detail => app.merge_impl().await,

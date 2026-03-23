@@ -1,8 +1,14 @@
 use std::collections::{HashMap, HashSet};
+use std::io::stdout;
 use std::path::PathBuf;
 use std::time::Instant;
 
 use anyhow::Result;
+use crossterm::ExecutableCommand;
+use crossterm::terminal::{
+    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+};
+use ratatui::prelude::*;
 use tokio::sync::mpsc;
 
 use crate::bd::{self, Issue};
@@ -242,5 +248,67 @@ impl App {
 
         self.impl_jobs.remove(&issue_id);
         self.notification = Some((format!("Discarded: {issue_id}"), Instant::now()));
+    }
+
+    // --- Edit Description ---
+
+    pub async fn edit_description(
+        &mut self,
+        terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+    ) {
+        let Some(issue) = self.selected_issue() else {
+            return;
+        };
+        let issue_id = issue.id.clone();
+        let current = issue.description.clone().unwrap_or_default();
+
+        // 一時ファイルに書き出し
+        let tmp = std::env::temp_dir().join(format!("strand-{issue_id}.md"));
+        if std::fs::write(&tmp, &current).is_err() {
+            self.notification = Some(("Failed to create temp file".into(), Instant::now()));
+            return;
+        }
+
+        // TUIを一時離脱してエディタ起動
+        let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".into());
+        disable_raw_mode().ok();
+        stdout().execute(LeaveAlternateScreen).ok();
+        terminal.show_cursor().ok();
+
+        let status = std::process::Command::new(&editor).arg(&tmp).status();
+
+        // TUI復帰
+        stdout().execute(EnterAlternateScreen).ok();
+        enable_raw_mode().ok();
+        terminal.clear().ok();
+
+        match status {
+            Ok(s) if s.success() => {
+                if let Ok(new_desc) = std::fs::read_to_string(&tmp) {
+                    let trimmed = new_desc.trim();
+                    if trimmed != current.trim() {
+                        match bd::update_description(self.dir.as_deref(), &issue_id, trimmed).await
+                        {
+                            Ok(_) => {
+                                self.notification = Some((
+                                    format!("Description updated: {issue_id}"),
+                                    Instant::now(),
+                                ));
+                                let _ = self.load_issues().await;
+                            }
+                            Err(e) => {
+                                self.notification =
+                                    Some((format!("Update failed: {e}"), Instant::now()));
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {
+                self.notification = Some(("Editor exited with error".into(), Instant::now()));
+            }
+        }
+
+        let _ = std::fs::remove_file(&tmp);
     }
 }

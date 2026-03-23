@@ -208,9 +208,9 @@ fn draw_detail(frame: &mut Frame, app: &App) {
         .get(&issue.id)
         .is_some_and(|j| matches!(j.status, ImplStatus::Done))
     {
-        " Issue Detail (Enter:back q:quit m:merge d:discard) "
+        " Issue Detail (Enter:back q:quit e:edit m:merge d:discard) "
     } else {
-        " Issue Detail (Enter:back q:quit) "
+        " Issue Detail (Enter:back q:quit e:edit) "
     };
 
     let paragraph = Paragraph::new(lines)
