@@ -32,14 +32,27 @@ fn status_style(status: &str) -> Style {
     }
 }
 
+fn short_id(id: &str) -> &str {
+    id.rsplit_once('-').map(|(_, s)| s).unwrap_or(id)
+}
+
+fn short_status(status: &str) -> &str {
+    match status {
+        "in_progress" => "prog",
+        "deferred" => "defer",
+        "closed" => "close",
+        s => s,
+    }
+}
+
 fn issue_row<'a>(issue: &'a Issue, enriching: bool) -> Row<'a> {
     let icon = if enriching { "⟳" } else { " " };
     let priority_text = issue.priority.map(|p| format!("P{p}")).unwrap_or_default();
 
     Row::new(vec![
         Cell::from(icon).style(Style::default().fg(Color::Yellow)),
-        Cell::from(issue.id.clone()).style(Style::default().fg(Color::DarkGray)),
-        Cell::from(issue.status.clone()).style(status_style(&issue.status)),
+        Cell::from(short_id(&issue.id).to_string()).style(Style::default().fg(Color::DarkGray)),
+        Cell::from(short_status(&issue.status).to_string()).style(status_style(&issue.status)),
         Cell::from(priority_text).style(priority_style(issue.priority)),
         Cell::from(issue.title.clone()),
     ])
@@ -75,9 +88,9 @@ fn draw_list(frame: &mut Frame, app: &App) {
 
     let widths = [
         Constraint::Length(2),
-        Constraint::Length(12),
-        Constraint::Length(12),
         Constraint::Length(4),
+        Constraint::Length(6),
+        Constraint::Length(3),
         Constraint::Min(10),
     ];
 
