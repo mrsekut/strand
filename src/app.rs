@@ -1,21 +1,31 @@
 use anyhow::Result;
+use tokio::sync::mpsc;
 
 use crate::bd::{self, Issue};
+
+pub enum EnrichEvent {
+    // 後で追加される
+}
 
 pub struct App {
     pub issues: Vec<Issue>,
     pub selected: usize,
     pub show_detail: bool,
     pub dir: Option<String>,
+    pub enrich_tx: mpsc::Sender<EnrichEvent>,
+    pub enrich_rx: mpsc::Receiver<EnrichEvent>,
 }
 
 impl App {
     pub fn new(dir: Option<String>) -> Self {
+        let (enrich_tx, enrich_rx) = mpsc::channel(32);
         Self {
             issues: Vec::new(),
             selected: 0,
             show_detail: false,
             dir,
+            enrich_tx,
+            enrich_rx,
         }
     }
 

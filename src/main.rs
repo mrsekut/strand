@@ -1,14 +1,16 @@
 mod app;
 mod bd;
+mod enrich;
 mod ui;
 
 use anyhow::Result;
 use app::App;
 use crossterm::{
     ExecutableCommand,
-    event::{self, Event, KeyCode},
+    event::{Event, EventStream, KeyCode},
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
+use futures::StreamExt;
 use ratatui::prelude::*;
 use std::io::stdout;
 
@@ -37,11 +39,13 @@ async fn run(
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
     app: &mut App,
 ) -> Result<()> {
+    let mut event_stream = EventStream::new();
+
     loop {
         terminal.draw(|frame| ui::draw(frame, app))?;
 
-        if event::poll(std::time::Duration::from_millis(100))? {
-            if let Event::Key(key) = event::read()? {
+        tokio::select! {
+            Some(Ok(Event::Key(key))) = event_stream.next() => {
                 match key.code {
                     KeyCode::Char('q') => break,
                     KeyCode::Char('j') | KeyCode::Down => app.next(),
@@ -49,6 +53,9 @@ async fn run(
                     KeyCode::Enter => app.toggle_detail(),
                     _ => {}
                 }
+            }
+            Some(_event) = app.enrich_rx.recv() => {
+                // 後のPRで処理を追加
             }
         }
     }

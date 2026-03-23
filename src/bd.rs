@@ -55,3 +55,45 @@ pub async fn show_issue(dir: Option<&str>, id: &str) -> Result<Issue> {
     let issue: Issue = serde_json::from_slice(&output.stdout)?;
     Ok(issue)
 }
+
+pub async fn update_description(dir: Option<&str>, id: &str, description: &str) -> Result<()> {
+    let output = bd_command(dir)
+        .args(["update", id, "--description", description])
+        .output()
+        .await?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "bd update description failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    Ok(())
+}
+
+pub async fn update_design(dir: Option<&str>, id: &str, design: &str) -> Result<()> {
+    let output = bd_command(dir)
+        .args(["update", id, "--design", design])
+        .output()
+        .await?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "bd update design failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    Ok(())
+}
+
+pub async fn add_label(dir: Option<&str>, id: &str, label: &str) -> Result<()> {
+    let output = bd_command(dir)
+        .args(["label", "add", id, label])
+        .output()
+        .await?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "bd label add failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    Ok(())
+}
