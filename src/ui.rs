@@ -5,6 +5,7 @@ use ratatui::{
 
 use crate::app::App;
 use crate::bd::Issue;
+use crate::implement::ImplStatus;
 
 pub fn draw(frame: &mut Frame, app: &App) {
     if app.show_detail {
@@ -45,12 +46,25 @@ fn short_status(status: &str) -> &str {
     }
 }
 
-fn issue_row<'a>(issue: &'a Issue, enriching: bool) -> Row<'a> {
-    let icon = if enriching { "⟳" } else { " " };
+fn issue_icon(app: &App, issue: &Issue) -> (&'static str, Style) {
+    if let Some(job) = app.impl_jobs.get(&issue.id) {
+        return match &job.status {
+            ImplStatus::Running => ("⚡", Style::default().fg(Color::Magenta)),
+            ImplStatus::Done => ("✓", Style::default().fg(Color::Green)),
+            ImplStatus::Failed(_) => ("✗", Style::default().fg(Color::Red)),
+        };
+    }
+    if app.enriching_ids.contains(&issue.id) {
+        return ("⟳", Style::default().fg(Color::Yellow));
+    }
+    (" ", Style::default())
+}
+
+fn issue_row<'a>(issue: &'a Issue, icon: &'a str, icon_style: Style) -> Row<'a> {
     let priority_text = issue.priority.map(|p| format!("P{p}")).unwrap_or_default();
 
     Row::new(vec![
-        Cell::from(icon).style(Style::default().fg(Color::Yellow)),
+        Cell::from(icon).style(icon_style),
         Cell::from(short_id(&issue.id).to_string()).style(Style::default().fg(Color::DarkGray)),
         Cell::from(short_status(&issue.status).to_string()).style(status_style(&issue.status)),
         Cell::from(priority_text).style(priority_style(issue.priority)),
@@ -81,8 +95,8 @@ fn draw_list(frame: &mut Frame, app: &App) {
         .issues
         .iter()
         .map(|issue| {
-            let enriching = app.enriching_ids.contains(&issue.id);
-            issue_row(issue, enriching)
+            let (icon, icon_style) = issue_icon(app, issue);
+            issue_row(issue, icon, icon_style)
         })
         .collect();
 
@@ -98,7 +112,7 @@ fn draw_list(frame: &mut Frame, app: &App) {
         .header(header)
         .block(
             Block::default()
-                .title(" strand - Issues (q:quit j/k:move Enter:detail e:enrich)")
+                .title(" strand - Issues (q:quit j/k:move Enter:detail e:enrich i:implement)")
                 .borders(Borders::ALL),
         )
         .row_highlight_style(Style::default().bg(Color::Rgb(70, 70, 90)))
@@ -147,17 +161,60 @@ fn draw_detail(frame: &mut Frame, app: &App) {
         Line::from(""),
     ];
 
+    // Impl job info
+    if let Some(job) = app.impl_jobs.get(&issue.id) {
+        let (status_text, style) = match &job.status {
+            ImplStatus::Running => ("⚡ Implementing...", Style::default().fg(Color::Magenta)),
+            ImplStatus::Done => ("✓ Implementation done", Style::default().fg(Color::Green)),
+            ImplStatus::Failed(e) => {
+                lines.push(Line::from(vec![
+                    Span::styled("Impl: ", Style::default().fg(Color::Cyan)),
+                    Span::styled(format!("✗ Failed: {e}"), Style::default().fg(Color::Red)),
+                ]));
+                // skip the default push below
+                ("", Style::default())
+            }
+        };
+        if !status_text.is_empty() {
+            lines.push(Line::from(vec![
+                Span::styled("Impl: ", Style::default().fg(Color::Cyan)),
+                Span::styled(status_text, style),
+            ]));
+        }
+        lines.push(Line::from(vec![
+            Span::styled("Branch: ", Style::default().fg(Color::Cyan)),
+            Span::raw(&job.branch),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled("Worktree: ", Style::default().fg(Color::Cyan)),
+            Span::raw(job.worktree_path.to_string_lossy().to_string()),
+        ]));
+        if matches!(job.status, ImplStatus::Done) {
+            lines.push(Line::from(Span::styled(
+                "[m: merge] [d: discard]",
+                Style::default().fg(Color::Yellow),
+            )));
+        }
+        lines.push(Line::from(""));
+    }
+
     let desc = issue.description.as_deref().unwrap_or("(no description)");
     for l in desc.lines() {
         lines.push(Line::from(l.to_string()));
     }
 
+    let detail_title = if app
+        .impl_jobs
+        .get(&issue.id)
+        .is_some_and(|j| matches!(j.status, ImplStatus::Done))
+    {
+        " Issue Detail (Enter:back q:quit m:merge d:discard) "
+    } else {
+        " Issue Detail (Enter:back q:quit) "
+    };
+
     let paragraph = Paragraph::new(lines)
-        .block(
-            Block::default()
-                .title(" Issue Detail (Enter:back q:quit) ")
-                .borders(Borders::ALL),
-        )
+        .block(Block::default().title(detail_title).borders(Borders::ALL))
         .wrap(Wrap { trim: false });
 
     frame.render_widget(paragraph, chunks[0]);

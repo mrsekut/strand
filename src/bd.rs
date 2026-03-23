@@ -84,6 +84,17 @@ pub async fn update_design(dir: Option<&str>, id: &str, design: &str) -> Result<
     Ok(())
 }
 
+pub async fn close_issue(dir: Option<&str>, id: &str) -> Result<()> {
+    let output = bd_command(dir).args(["close", id]).output().await?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "bd close failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    Ok(())
+}
+
 pub async fn add_label(dir: Option<&str>, id: &str, label: &str) -> Result<()> {
     let output = bd_command(dir)
         .args(["label", "add", id, label])

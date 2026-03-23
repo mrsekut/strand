@@ -1,6 +1,7 @@
 mod app;
 mod bd;
 mod enrich;
+mod implement;
 mod ui;
 
 use anyhow::Result;
@@ -54,6 +55,9 @@ async fn run(
                             KeyCode::Char('k') | KeyCode::Up => app.previous(),
                             KeyCode::Enter => app.toggle_detail(),
                             KeyCode::Char('e') => app.start_enrich(),
+                            KeyCode::Char('i') => app.start_implement(),
+                            KeyCode::Char('m') if app.show_detail => app.merge_impl().await,
+                            KeyCode::Char('d') if app.show_detail => app.discard_impl().await,
                             _ => {}
                         }
                     }
@@ -64,6 +68,9 @@ async fn run(
             }
             Some(event) = app.enrich_rx.recv() => {
                 app.handle_enrich_event(event).await;
+            }
+            Some(event) = app.impl_rx.recv() => {
+                app.handle_impl_event(event);
             }
         }
     }
