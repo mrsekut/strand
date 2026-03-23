@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SANDBOX="/tmp/bdtui-sandbox"
+SANDBOX="/tmp/strand-sandbox"
 
 if [ -d "$SANDBOX" ]; then
   echo "Removing existing sandbox..."

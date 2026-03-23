@@ -1,4 +1,4 @@
-# bdtui: AI-assisted Issue Triage Cockpit
+# strand: AI-assisted Issue Triage Cockpit
 
 beads CLIのラッパーTUI。大量のissueを雑に投げ込み、AIが自動で精緻化・プロトタイピングし、人間がTUI上でtriage（承認/却下/統合）する。
 
@@ -85,9 +85,9 @@ AIがenrichした結果の「レビュー待ち」キュー。
 
 ## beads CLIとの対応
 
-bdtuiは内部的にbeads CLIを呼び出す。独自のデータストアは持たない（または最小限）。
+strandは内部的にbeads CLIを呼び出す。独自のデータストアは持たない（または最小限）。
 
-| bdtui操作      | beads CLI                                                              |
+| strand操作      | beads CLI                                                              |
 | -------------- | ---------------------------------------------------------------------- |
 | issue追加      | `bd q` / `bd create`                                                   |
 | 詳細表示       | `bd show <id> --json`                                                  |
@@ -99,7 +99,7 @@ bdtuiは内部的にbeads CLIを呼び出す。独自のデータストアは持
 | 重複マーク     | `bd duplicate <id> --of <canonical>`                                   |
 | 上位互換で置換 | `bd supersede <id> --with <new>`                                       |
 | ラベル操作     | `bd label add/remove`                                                  |
-| 類似検出       | `bd duplicates`（ハッシュ一致のみ、セマンティック類似はbdtui側で実装） |
+| 類似検出       | `bd duplicates`（ハッシュ一致のみ、セマンティック類似はstrand側で実装） |
 | stale検出      | `bd stale`                                                             |
 | blocked一覧    | `bd blocked`                                                           |
 | 検索           | `bd search`                                                            |
@@ -107,7 +107,7 @@ bdtuiは内部的にbeads CLIを呼び出す。独自のデータストアは持
 ## 技術スタック
 
 ```
-bdtui (Rust)
+strand (Rust)
 ├── TUI: ratatui + crossterm
 ├── 非同期: tokio
 ├── beads連携: bd CLIをsubprocessとして呼び出し（--no-daemon --json）
@@ -115,7 +115,7 @@ bdtui (Rust)
 │   ├── Claude Code: subprocessとしてspawn（spec生成、プロト実装）
 │   └── Embedding/Vector Search: 類似度計算（ローカル or Claude API）
 └── データ
-    ├── issueデータ: beadsが管理（bdtuiは持たない）
+    ├── issueデータ: beadsが管理（strandは持たない）
     └── AI生成メタデータ: ローカルに保持（enrich結果、ソリューション案、プロトbranch情報等）
 ```
 

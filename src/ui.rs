@@ -40,7 +40,7 @@ fn draw_list(frame: &mut Frame, app: &App) {
     let list = List::new(items)
         .block(
             Block::default()
-                .title(" bdtui - Issues (q:quit j/k:move Enter:detail e:enrich) ")
+                .title(" strand - Issues (q:quit j/k:move Enter:detail e:enrich)")
                 .borders(Borders::ALL),
         )
         .highlight_style(Style::default().add_modifier(Modifier::REVERSED))

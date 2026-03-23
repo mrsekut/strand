@@ -1,4 +1,4 @@
-# bdtui
+# strand
 
 beads CLIのラッパーTUI。大量のissueを雑に投げ込み、AIが自動で精緻化・プロトタイピングし、人間がTUI上でtriage（承認/却下/統合）する。
 
@@ -23,7 +23,7 @@ cargo build
 bash scripts/setup-sandbox.sh
 ```
 
-`/tmp/bdtui-sandbox/` に以下が作られる:
+`/tmp/strand-sandbox/` に以下が作られる:
 
 - issue 30件（P0〜P4、bug/feature/task/chore混在）
 - closed 5件（完了理由付き）
@@ -34,7 +34,7 @@ bash scripts/setup-sandbox.sh
 ### TUI起動
 
 ```bash
-cargo run -- --dir /tmp/bdtui-sandbox
+cargo run -- --dir /tmp/strand-sandbox
 ```
 
 ### キー操作

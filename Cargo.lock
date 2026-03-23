@@ -15,19 +15,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
-name = "bdtui"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "crossterm",
- "futures",
- "ratatui",
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
 name = "bitflags"
 version = "2.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -579,6 +566,19 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
+
+[[package]]
+name = "strand"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "crossterm",
+ "futures",
+ "ratatui",
+ "serde",
+ "serde_json",
+ "tokio",
+]
 
 [[package]]
 name = "strsim"
