@@ -39,23 +39,6 @@ pub async fn list_issues(dir: Option<&str>) -> Result<Vec<Issue>> {
     Ok(issues)
 }
 
-pub async fn show_issue(dir: Option<&str>, id: &str) -> Result<Issue> {
-    let output = bd_command(dir)
-        .args(["show", id, "--json"])
-        .output()
-        .await?;
-
-    if !output.status.success() {
-        anyhow::bail!(
-            "bd show failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    let issue: Issue = serde_json::from_slice(&output.stdout)?;
-    Ok(issue)
-}
-
 pub async fn update_title(dir: Option<&str>, id: &str, title: &str) -> Result<()> {
     let output = bd_command(dir)
         .args(["update", id, "--title", title])
