@@ -102,6 +102,13 @@ async fn handle_list_key(key: KeyCode, app: &mut App) {
                 app.set_priority(c as u8 - b'0').await;
             }
         }
+        InputMode::AwaitingCloseConfirm => {
+            app.input_mode = InputMode::Normal;
+            app.notification = None;
+            if let KeyCode::Char('y') = key {
+                app.close_issue().await;
+            }
+        }
         InputMode::Normal => match key {
             KeyCode::Down => app.next(),
             KeyCode::Up => app.previous(),
@@ -111,7 +118,10 @@ async fn handle_list_key(key: KeyCode, app: &mut App) {
                 app.input_mode = InputMode::AwaitingAI;
                 app.notification = Some(("a-...".into(), std::time::Instant::now()));
             }
-            KeyCode::Char('x') => app.close_issue().await,
+            KeyCode::Char('x') => {
+                app.input_mode = InputMode::AwaitingCloseConfirm;
+                app.notification = Some(("Close? (y/n)".into(), std::time::Instant::now()));
+            }
             KeyCode::Char('p') => {
                 app.input_mode = InputMode::AwaitingPriority;
                 app.notification = Some(("p-...".into(), std::time::Instant::now()));
@@ -126,6 +136,15 @@ async fn handle_detail_key(
     app: &mut App,
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
 ) {
+    if app.input_mode == InputMode::AwaitingCloseConfirm {
+        app.input_mode = InputMode::Normal;
+        app.notification = None;
+        if let KeyCode::Char('y') = key {
+            app.close_issue().await;
+        }
+        return;
+    }
+
     match key {
         KeyCode::Esc => app.back_to_list(),
         KeyCode::Down => app.next(),
@@ -134,7 +153,10 @@ async fn handle_detail_key(
         KeyCode::Char('e') => app.edit_description(terminal).await,
         KeyCode::Char('m') => app.merge_impl().await,
         KeyCode::Char('d') => app.discard_impl().await,
-        KeyCode::Char('x') => app.close_issue().await,
+        KeyCode::Char('x') => {
+            app.input_mode = InputMode::AwaitingCloseConfirm;
+            app.notification = Some(("Close? (y/n)".into(), std::time::Instant::now()));
+        }
         _ => {}
     }
 }

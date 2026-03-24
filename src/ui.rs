@@ -236,6 +236,7 @@ fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
     let keys: Vec<(&str, &str)> = match app.input_mode {
         InputMode::AwaitingAI => vec![("e", "enrich"), ("i", "implement"), ("Esc", "cancel")],
         InputMode::AwaitingPriority => vec![("0-4", "priority"), ("Esc", "cancel")],
+        InputMode::AwaitingCloseConfirm => vec![("y", "confirm close"), ("n", "cancel")],
         InputMode::Normal => vec![
             ("Enter", "detail"),
             ("c", "copy"),
