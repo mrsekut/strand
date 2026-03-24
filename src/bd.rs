@@ -98,6 +98,20 @@ pub async fn update_design(dir: Option<&str>, id: &str, design: &str) -> Result<
     Ok(())
 }
 
+pub async fn update_priority(dir: Option<&str>, id: &str, priority: u8) -> Result<()> {
+    let output = bd_command(dir)
+        .args(["update", id, "--priority", &priority.to_string()])
+        .output()
+        .await?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "bd update priority failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    Ok(())
+}
+
 pub async fn close_issue(dir: Option<&str>, id: &str) -> Result<()> {
     let output = bd_command(dir).args(["close", id]).output().await?;
     if !output.status.success() {

@@ -113,7 +113,7 @@ fn draw_list(frame: &mut Frame, app: &App) {
         .block(
             Block::default()
                 .title(
-                    " strand - Issues (q:quit ↑↓:move Enter:detail c:copy ae:enrich ai:implement)",
+                    " strand - Issues (q:quit ↑↓:move Enter:detail c:copy p:priority ae:enrich ai:implement)",
                 )
                 .borders(Borders::ALL),
         )

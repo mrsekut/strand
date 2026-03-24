@@ -59,7 +59,7 @@ async fn run(
                         if app.show_detail {
                             handle_detail_key(key.code, app, terminal).await;
                         } else {
-                            handle_list_key(key.code, app);
+                            handle_list_key(key.code, app).await;
                         }
                     }
                     Some(Ok(_)) => {} // リサイズ等のイベントは無視
@@ -83,38 +83,39 @@ async fn run(
     Ok(())
 }
 
-fn handle_list_key(key: KeyCode, app: &mut App) {
-    // AwaitingAI状態の処理
-    if app.input_mode == InputMode::AwaitingAI {
-        match key {
-            KeyCode::Char('e') => {
-                app.input_mode = InputMode::Normal;
-                app.notification = None;
-                app.start_enrich();
-            }
-            KeyCode::Char('i') => {
-                app.input_mode = InputMode::Normal;
-                app.notification = None;
-                app.start_implement();
-            }
-            _ => {
-                app.input_mode = InputMode::Normal;
-                app.notification = None;
+async fn handle_list_key(key: KeyCode, app: &mut App) {
+    match app.input_mode {
+        InputMode::AwaitingAI => {
+            app.input_mode = InputMode::Normal;
+            app.notification = None;
+            match key {
+                KeyCode::Char('e') => app.start_enrich(),
+                KeyCode::Char('i') => app.start_implement(),
+                _ => {}
             }
         }
-        return;
-    }
-
-    match key {
-        KeyCode::Down => app.next(),
-        KeyCode::Up => app.previous(),
-        KeyCode::Enter => app.open_detail(),
-        KeyCode::Char('c') => app.copy_id(),
-        KeyCode::Char('a') => {
-            app.input_mode = InputMode::AwaitingAI;
-            app.notification = Some(("a-...".into(), std::time::Instant::now()));
+        InputMode::AwaitingPriority => {
+            app.input_mode = InputMode::Normal;
+            app.notification = None;
+            if let KeyCode::Char(c @ '0'..='4') = key {
+                app.set_priority(c as u8 - b'0').await;
+            }
         }
-        _ => {}
+        InputMode::Normal => match key {
+            KeyCode::Down => app.next(),
+            KeyCode::Up => app.previous(),
+            KeyCode::Enter => app.open_detail(),
+            KeyCode::Char('c') => app.copy_id(),
+            KeyCode::Char('a') => {
+                app.input_mode = InputMode::AwaitingAI;
+                app.notification = Some(("a-...".into(), std::time::Instant::now()));
+            }
+            KeyCode::Char('p') => {
+                app.input_mode = InputMode::AwaitingPriority;
+                app.notification = Some(("p-...".into(), std::time::Instant::now()));
+            }
+            _ => {}
+        },
     }
 }
 

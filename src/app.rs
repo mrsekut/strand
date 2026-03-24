@@ -19,6 +19,7 @@ use crate::implement::{self, ImplEvent, ImplJob, ImplStatus};
 pub enum InputMode {
     Normal,
     AwaitingAI,
+    AwaitingPriority,
 }
 
 pub struct App {
@@ -286,6 +287,28 @@ impl App {
 
         self.impl_jobs.remove(&issue_id);
         self.notification = Some((format!("Discarded: {issue_id}"), Instant::now()));
+    }
+
+    // --- Set Priority ---
+
+    pub async fn set_priority(&mut self, priority: u8) {
+        let Some(issue) = self.selected_issue() else {
+            return;
+        };
+        let issue_id = issue.id.clone();
+
+        match bd::update_priority(self.dir.as_deref(), &issue_id, priority).await {
+            Ok(_) => {
+                self.notification = Some((
+                    format!("Priority set: {issue_id} → P{priority}"),
+                    Instant::now(),
+                ));
+                let _ = self.load_issues().await;
+            }
+            Err(e) => {
+                self.notification = Some((format!("Priority update failed: {e}"), Instant::now()));
+            }
+        }
     }
 
     // --- Copy ID ---
