@@ -139,9 +139,11 @@ impl App {
         let Some(issue) = self.selected_issue() else {
             return;
         };
+        self.enrich_issue(issue.clone());
+    }
+
+    fn enrich_issue(&mut self, issue: Issue) {
         let issue_id = issue.id.clone();
-        let title = issue.title.clone();
-        let description = issue.description.clone();
 
         if self.enriching_ids.contains(&issue_id) {
             return;
@@ -151,8 +153,8 @@ impl App {
 
         let request = enrich::EnrichRequest {
             issue_id,
-            title,
-            description,
+            title: issue.title.clone(),
+            description: issue.description.clone(),
         };
         let dir = self.dir.clone();
         let tx = self.enrich_tx.clone();
@@ -160,6 +162,23 @@ impl App {
         tokio::spawn(async move {
             let _ = enrich::run(request, dir, tx).await;
         });
+    }
+
+    /// enrichedラベルがない未enrich issueを自動的にenrichする
+    pub fn auto_enrich(&mut self) {
+        let unenriched: Vec<Issue> = self
+            .issues
+            .iter()
+            .filter(|issue| {
+                !issue.labels.contains(&"enriched".to_string())
+                    && !self.enriching_ids.contains(&issue.id)
+            })
+            .cloned()
+            .collect();
+
+        for issue in unenriched {
+            self.enrich_issue(issue);
+        }
     }
 
     pub async fn handle_enrich_event(&mut self, event: EnrichEvent) {

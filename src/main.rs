@@ -26,6 +26,7 @@ async fn main() -> Result<()> {
     let mut app = App::new(dir);
     app.load_issues().await?;
     app.restore_impl_jobs().await;
+    app.auto_enrich();
 
     enable_raw_mode()?;
     stdout().execute(EnterAlternateScreen)?;
@@ -77,6 +78,7 @@ async fn run(
             _ = poll_interval.tick() => {
                 if app.has_db_changed() {
                     let _ = app.load_issues().await;
+                    app.auto_enrich();
                 }
             }
         }
