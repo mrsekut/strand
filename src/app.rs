@@ -20,6 +20,7 @@ pub enum InputMode {
     Normal,
     AwaitingAI,
     AwaitingPriority,
+    AwaitingCloseConfirm,
 }
 
 pub struct App {
