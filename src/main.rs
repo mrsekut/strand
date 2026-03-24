@@ -111,6 +111,7 @@ async fn handle_list_key(key: KeyCode, app: &mut App) {
                 app.input_mode = InputMode::AwaitingAI;
                 app.notification = Some(("a-...".into(), std::time::Instant::now()));
             }
+            KeyCode::Char('x') => app.close_issue().await,
             KeyCode::Char('p') => {
                 app.input_mode = InputMode::AwaitingPriority;
                 app.notification = Some(("p-...".into(), std::time::Instant::now()));
@@ -133,6 +134,7 @@ async fn handle_detail_key(
         KeyCode::Char('e') => app.edit_description(terminal).await,
         KeyCode::Char('m') => app.merge_impl().await,
         KeyCode::Char('d') => app.discard_impl().await,
+        KeyCode::Char('x') => app.close_issue().await,
         _ => {}
     }
 }

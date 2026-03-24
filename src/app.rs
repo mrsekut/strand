@@ -298,6 +298,28 @@ impl App {
         self.notification = Some((format!("Discarded: {issue_id}"), Instant::now()));
     }
 
+    // --- Close Issue ---
+
+    pub async fn close_issue(&mut self) {
+        let Some(issue) = self.selected_issue() else {
+            return;
+        };
+        let issue_id = issue.id.clone();
+
+        match bd::close_issue(self.dir.as_deref(), &issue_id).await {
+            Ok(_) => {
+                self.notification = Some((format!("Closed: {issue_id}"), Instant::now()));
+                let _ = self.load_issues().await;
+                if self.selected >= self.issues.len() && self.selected > 0 {
+                    self.selected -= 1;
+                }
+            }
+            Err(e) => {
+                self.notification = Some((format!("Close failed: {e}"), Instant::now()));
+            }
+        }
+    }
+
     // --- Set Priority ---
 
     pub async fn set_priority(&mut self, priority: u8) {
