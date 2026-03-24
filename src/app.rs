@@ -65,6 +65,15 @@ impl App {
         Ok(())
     }
 
+    pub async fn restore_impl_jobs(&mut self) {
+        let repo_dir = self.repo_dir();
+        let issue_ids: Vec<String> = self.issues.iter().map(|i| i.id.clone()).collect();
+        let discovered = implement::discover_worktrees(&repo_dir, &issue_ids).await;
+        for job in discovered {
+            self.impl_jobs.entry(job.issue_id.clone()).or_insert(job);
+        }
+    }
+
     fn beads_db_path(&self) -> PathBuf {
         let base = match &self.dir {
             Some(d) => PathBuf::from(d),
