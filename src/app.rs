@@ -109,8 +109,19 @@ impl App {
         }
     }
 
-    pub fn open_detail(&mut self) {
+    pub async fn open_detail(&mut self) {
         self.show_detail = true;
+
+        if let Some(issue) = self.issues.get_mut(self.selected)
+            && issue.labels.contains(&"strand-unread".to_string())
+        {
+            issue.labels.retain(|l| l != "strand-unread");
+            let id = issue.id.clone();
+            let dir = self.dir.clone();
+            tokio::spawn(async move {
+                let _ = bd::remove_label(dir.as_deref(), &id, "strand-unread").await;
+            });
+        }
     }
 
     pub fn back_to_list(&mut self) {

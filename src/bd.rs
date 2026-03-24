@@ -12,6 +12,8 @@ pub struct Issue {
     pub priority: Option<u8>,
     #[serde(default)]
     pub description: Option<String>,
+    #[serde(default)]
+    pub labels: Vec<String>,
 }
 
 fn bd_command(dir: Option<&str>) -> Command {
@@ -24,7 +26,7 @@ fn bd_command(dir: Option<&str>) -> Command {
 
 pub async fn list_issues(dir: Option<&str>) -> Result<Vec<Issue>> {
     let output = bd_command(dir)
-        .args(["list", "--json", "--limit", "0"])
+        .args(["list", "--json", "--limit", "0", "--all"])
         .output()
         .await?;
 
@@ -36,6 +38,10 @@ pub async fn list_issues(dir: Option<&str>) -> Result<Vec<Issue>> {
     }
 
     let issues: Vec<Issue> = serde_json::from_slice(&output.stdout)?;
+    let issues = issues
+        .into_iter()
+        .filter(|i| i.status != "closed")
+        .collect();
     Ok(issues)
 }
 
@@ -100,6 +106,20 @@ pub async fn close_issue(dir: Option<&str>, id: &str) -> Result<()> {
     if !output.status.success() {
         anyhow::bail!(
             "bd close failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    Ok(())
+}
+
+pub async fn remove_label(dir: Option<&str>, id: &str, label: &str) -> Result<()> {
+    let output = bd_command(dir)
+        .args(["label", "remove", id, label])
+        .output()
+        .await?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "bd label remove failed: {}",
             String::from_utf8_lossy(&output.stderr)
         );
     }

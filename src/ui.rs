@@ -57,6 +57,9 @@ fn issue_icon(app: &App, issue: &Issue) -> (&'static str, Style) {
     if app.enriching_ids.contains(&issue.id) {
         return ("⟳", Style::default().fg(Color::Yellow));
     }
+    if issue.labels.contains(&"strand-unread".to_string()) {
+        return ("●", Style::default().fg(Color::Cyan));
+    }
     (" ", Style::default())
 }
 

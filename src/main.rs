@@ -105,7 +105,7 @@ async fn handle_list_key(key: KeyCode, app: &mut App) {
         InputMode::Normal => match key {
             KeyCode::Down => app.next(),
             KeyCode::Up => app.previous(),
-            KeyCode::Enter => app.open_detail(),
+            KeyCode::Enter => app.open_detail().await,
             KeyCode::Char('c') => app.copy_id(),
             KeyCode::Char('a') => {
                 app.input_mode = InputMode::AwaitingAI;

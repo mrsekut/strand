@@ -175,6 +175,7 @@ async fn run_inner(request: &EnrichRequest, dir: Option<&str>) -> Result<()> {
     bd::update_description(dir, &request.issue_id, &description).await?;
     bd::update_design(dir, &request.issue_id, &design).await?;
     bd::add_label(dir, &request.issue_id, "enriched").await?;
+    bd::add_label(dir, &request.issue_id, "strand-unread").await?;
 
     Ok(())
 }
