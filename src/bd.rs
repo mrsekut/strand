@@ -73,19 +73,7 @@ pub async fn update_description(dir: Option<&str>, id: &str, description: &str) 
     Ok(())
 }
 
-pub async fn update_design(dir: Option<&str>, id: &str, design: &str) -> Result<()> {
-    let output = bd_command(dir)
-        .args(["update", id, "--design", design])
-        .output()
-        .await?;
-    if !output.status.success() {
-        anyhow::bail!(
-            "bd update design failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-    Ok(())
-}
+
 
 pub async fn update_priority(dir: Option<&str>, id: &str, priority: u8) -> Result<()> {
     let output = bd_command(dir)
