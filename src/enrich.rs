@@ -38,27 +38,37 @@ pub fn build_prompt(request: &EnrichRequest) -> String {
     };
 
     format!(
-        r#"You are an issue analysis assistant. Given the following issue, please:
-
-1. Enrich the description: Infer and describe the background, context, and scope of impact for this issue.
-2. Propose 3 solution alternatives, each with a title, description, pros, and cons.
+        r#"You are an issue analysis assistant. Given the following issue, analyze and enrich it.
 
 Issue Title: {title}{description_section}
 
+Please provide:
+
+1. **Enriched Description**: Analyze this issue and write a structured description covering:
+   - Background and context (why this matters)
+   - Current problem or pain point
+   - Scope of impact
+   Use paragraph breaks (literal newline characters in the JSON string value) to separate sections for readability.
+
+2. **Solution Alternatives**: Propose 2-3 concrete solution approaches, each with pros and cons.
+
 Respond in JSON format exactly matching this structure:
 {{
-  "enriched_description": "...",
+  "enriched_description": "Background and context paragraph.\n\nCurrent problem paragraph.\n\nScope of impact paragraph.",
   "solutions": [
     {{
-      "title": "...",
-      "description": "...",
-      "pros": ["..."],
-      "cons": ["..."]
+      "title": "Short solution name",
+      "description": "Concrete description of this approach",
+      "pros": ["pro1", "pro2"],
+      "cons": ["con1", "con2"]
     }}
   ]
 }}
 
-Output only valid JSON, no markdown fences or extra text."#,
+Important:
+- Use \n for line breaks within string values to keep text readable
+- Output only valid JSON, no markdown fences or extra text
+- Write in the same language as the issue title"#,
         title = request.title,
     )
 }
