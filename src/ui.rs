@@ -239,7 +239,7 @@ fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
         InputMode::AwaitingCloseConfirm => vec![("y", "confirm close"), ("n", "cancel")],
         InputMode::Normal => vec![
             ("Enter", "detail"),
-            ("c", "copy"),
+            ("c", "copy id"),
             ("p", "priority"),
             ("a", "ai"),
             ("x", "close"),
@@ -261,7 +261,7 @@ fn draw_detail_keybar(frame: &mut Frame, app: &App, area: Rect) {
 
     let mut keys: Vec<(&str, &str)> = vec![
         ("Esc", "back"),
-        ("c", "copy"),
+        ("c", "copy id"),
         ("e", "edit"),
         ("x", "close"),
     ];
