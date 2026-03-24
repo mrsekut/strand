@@ -25,6 +25,7 @@ async fn main() -> Result<()> {
 
     let mut app = App::new(dir);
     app.load_issues().await?;
+    app.restore_impl_jobs().await;
 
     enable_raw_mode()?;
     stdout().execute(EnterAlternateScreen)?;

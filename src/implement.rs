@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use tokio::process::Command;
@@ -130,6 +130,76 @@ pub async fn merge_branch(repo_dir: &PathBuf, branch: &str) -> Result<()> {
         );
     }
     Ok(())
+}
+
+/// 既存のgit worktreeからImplJobを復元する
+pub async fn discover_worktrees(repo_dir: &Path, issue_ids: &[String]) -> Vec<ImplJob> {
+    let output = match Command::new("git")
+        .args(["worktree", "list", "--porcelain"])
+        .current_dir(repo_dir)
+        .output()
+        .await
+    {
+        Ok(o) => o,
+        Err(_) => return Vec::new(),
+    };
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    // porcelain形式: "worktree <path>\nHEAD ...\nbranch ...\n\n" のブロック
+    let mut jobs = Vec::new();
+    for block in stdout.split("\n\n") {
+        let wt_path = match block.lines().find_map(|l| l.strip_prefix("worktree ")) {
+            Some(p) => PathBuf::from(p),
+            None => continue,
+        };
+
+        // strand-impl-{short_id} パターンのworktreeのみ対象
+        let dir_name = match wt_path.file_name().and_then(|n| n.to_str()) {
+            Some(n) => n,
+            None => continue,
+        };
+        let sid = match dir_name.strip_prefix("strand-impl-") {
+            Some(s) => s,
+            None => continue,
+        };
+
+        // short_idからissue_idを逆引き
+        let issue_id = match issue_ids.iter().find(|id| short_id(id) == sid) {
+            Some(id) => id.clone(),
+            None => continue,
+        };
+
+        let branch = branch_name(&issue_id);
+
+        // masterとの差分でstatus判定
+        let status = match has_commits(repo_dir, &branch).await {
+            true => ImplStatus::Done,
+            false => ImplStatus::Failed("interrupted".to_string()),
+        };
+
+        jobs.push(ImplJob {
+            issue_id,
+            branch,
+            worktree_path: wt_path,
+            status,
+        });
+    }
+
+    jobs
+}
+
+async fn has_commits(repo_dir: &Path, branch: &str) -> bool {
+    let output = Command::new("git")
+        .args(["log", &format!("master..{branch}"), "--oneline"])
+        .current_dir(repo_dir)
+        .output()
+        .await;
+
+    match output {
+        Ok(o) => !String::from_utf8_lossy(&o.stdout).trim().is_empty(),
+        Err(_) => false,
+    }
 }
 
 pub async fn run(request: ImplRequest, tx: mpsc::Sender<ImplEvent>) -> Result<()> {
