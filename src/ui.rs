@@ -1,6 +1,6 @@
 use ratatui::{
     prelude::*,
-    widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState, Wrap},
+    widgets::{Cell, Paragraph, Row, Table, TableState, Wrap},
 };
 
 use crate::app::App;
@@ -78,7 +78,11 @@ fn issue_row<'a>(issue: &'a Issue, icon: &'a str, icon_style: Style) -> Row<'a> 
 fn draw_list(frame: &mut Frame, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(1), Constraint::Length(1)])
+        .constraints([
+            Constraint::Min(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+        ])
         .split(frame.area());
 
     let header = Row::new(vec![
@@ -113,13 +117,6 @@ fn draw_list(frame: &mut Frame, app: &App) {
 
     let table = Table::new(rows, widths)
         .header(header)
-        .block(
-            Block::default()
-                .title(
-                    " strand - Issues (q:quit ↑↓:move Enter:detail c:copy p:priority ae:enrich ai:implement)",
-                )
-                .borders(Borders::ALL),
-        )
         .row_highlight_style(Style::default().bg(Color::Rgb(70, 70, 90)))
         .highlight_symbol("▶ ");
 
@@ -128,7 +125,8 @@ fn draw_list(frame: &mut Frame, app: &App) {
 
     frame.render_stateful_widget(table, chunks[0], &mut state);
 
-    draw_notification(frame, app, chunks[1]);
+    draw_keybar(frame, app, chunks[1]);
+    draw_notification(frame, app, chunks[2]);
 }
 
 fn draw_detail(frame: &mut Frame, app: &App) {
@@ -138,7 +136,11 @@ fn draw_detail(frame: &mut Frame, app: &App) {
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(1), Constraint::Length(1)])
+        .constraints([
+            Constraint::Min(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+        ])
         .split(frame.area());
 
     let priority = issue
@@ -194,12 +196,6 @@ fn draw_detail(frame: &mut Frame, app: &App) {
             Span::styled("Worktree: ", Style::default().fg(Color::Cyan)),
             Span::raw(job.worktree_path.to_string_lossy().to_string()),
         ]));
-        if matches!(job.status, ImplStatus::Done) {
-            lines.push(Line::from(Span::styled(
-                "[m: merge] [d: discard]",
-                Style::default().fg(Color::Yellow),
-            )));
-        }
         lines.push(Line::from(""));
     }
 
@@ -208,23 +204,76 @@ fn draw_detail(frame: &mut Frame, app: &App) {
         lines.push(Line::from(l.to_string()));
     }
 
-    let detail_title = if app
-        .impl_jobs
-        .get(&issue.id)
-        .is_some_and(|j| matches!(j.status, ImplStatus::Done))
-    {
-        " Issue Detail (Esc:back q:quit ↑↓:move c:copy e:edit m:merge d:discard) "
-    } else {
-        " Issue Detail (Esc:back q:quit ↑↓:move c:copy e:edit) "
-    };
-
-    let paragraph = Paragraph::new(lines)
-        .block(Block::default().title(detail_title).borders(Borders::ALL))
-        .wrap(Wrap { trim: false });
+    let paragraph = Paragraph::new(lines).wrap(Wrap { trim: false });
 
     frame.render_widget(paragraph, chunks[0]);
 
-    draw_notification(frame, app, chunks[1]);
+    draw_detail_keybar(frame, app, chunks[1]);
+    draw_notification(frame, app, chunks[2]);
+}
+
+fn keybar_line(keys: &[(&str, &str)]) -> Line<'static> {
+    let sep_style = Style::default().fg(Color::DarkGray);
+    let key_style = Style::default()
+        .fg(Color::Yellow)
+        .add_modifier(Modifier::BOLD);
+    let desc_style = Style::default().fg(Color::DarkGray);
+
+    let mut spans = Vec::new();
+    for (i, (key, desc)) in keys.iter().enumerate() {
+        if i > 0 {
+            spans.push(Span::styled(" │ ", sep_style));
+        }
+        spans.push(Span::styled(key.to_string(), key_style));
+        spans.push(Span::styled(format!(" {desc}"), desc_style));
+    }
+    Line::from(spans)
+}
+
+fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
+    use crate::app::InputMode;
+
+    let keys: Vec<(&str, &str)> = match app.input_mode {
+        InputMode::AwaitingAI => vec![("e", "enrich"), ("i", "implement"), ("Esc", "cancel")],
+        InputMode::AwaitingPriority => vec![("0-4", "priority"), ("Esc", "cancel")],
+        InputMode::Normal => vec![
+            ("Enter", "detail"),
+            ("c", "copy"),
+            ("p", "priority"),
+            ("a", "ai"),
+            ("x", "close"),
+            ("q", "quit"),
+        ],
+    };
+
+    let line = keybar_line(&keys);
+    frame.render_widget(Paragraph::new(line), area);
+}
+
+fn draw_detail_keybar(frame: &mut Frame, app: &App, area: Rect) {
+    let issue = app.selected_issue();
+    let has_impl_done = issue.is_some_and(|i| {
+        app.impl_jobs
+            .get(&i.id)
+            .is_some_and(|j| matches!(j.status, ImplStatus::Done))
+    });
+
+    let mut keys: Vec<(&str, &str)> = vec![
+        ("Esc", "back"),
+        ("c", "copy"),
+        ("e", "edit"),
+        ("x", "close"),
+    ];
+
+    if has_impl_done {
+        keys.push(("m", "merge"));
+        keys.push(("d", "discard"));
+    }
+
+    keys.push(("q", "quit"));
+
+    let line = keybar_line(&keys);
+    frame.render_widget(Paragraph::new(line), area);
 }
 
 fn draw_notification(frame: &mut Frame, app: &App, area: Rect) {
