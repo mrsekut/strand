@@ -190,6 +190,10 @@ impl App {
                 self.enriching_ids.remove(&issue_id);
                 self.notification = Some((format!("Enriched: {issue_id}"), Instant::now()));
                 let _ = self.load_issues().await;
+                // enrich完了後、自動でimplementを開始
+                if let Some(issue) = self.issues.iter().find(|i| i.id == issue_id).cloned() {
+                    self.start_implement_issue(&issue);
+                }
             }
             EnrichEvent::Failed { issue_id, error } => {
                 self.enriching_ids.remove(&issue_id);
@@ -211,9 +215,13 @@ impl App {
     }
 
     pub fn start_implement(&mut self) {
-        let Some(issue) = self.selected_issue() else {
+        let Some(issue) = self.selected_issue().cloned() else {
             return;
         };
+        self.start_implement_issue(&issue);
+    }
+
+    fn start_implement_issue(&mut self, issue: &Issue) {
         let issue_id = issue.id.clone();
         let title = issue.title.clone();
         let description = issue.description.clone();
@@ -240,7 +248,7 @@ impl App {
             issue_id: issue_id.clone(),
             title,
             description,
-            design: None, // TODO: designフィールドがIssueに追加されたら対応
+            design: None,
             repo_dir,
         };
         let tx = self.impl_tx.clone();
