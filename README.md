@@ -1,47 +1,47 @@
 # strand
 
-beads CLIのラッパーTUI。大量のissueを雑に投げ込み、AIが自動で精緻化・プロトタイピングし、人間がTUI上でtriage（承認/却下/統合）する。
+A TUI wrapper for the beads CLI. Throw in a bunch of issues, let AI automatically refine and prototype them, and triage (approve/reject/merge) on the TUI.
 
-## 前提
+## Prerequisites
 
 - Rust (cargo)
-- [beads](https://github.com/anthropics/beads) CLI (`bd` コマンド)
+- [beads](https://github.com/anthropics/beads) CLI (`bd` command)
 
-## ビルド
+## Build
 
 ```bash
 cargo build
 ```
 
-## 開発用サンドボックス
+## Development Sandbox
 
-本リポジトリのbeadsとテストデータが混ざらないよう、`/tmp`に別リポジトリを作ってテストする。
+To keep beads data and test data separate from this repository, create a test repository in `/tmp`.
 
-### セットアップ
+### Setup
 
 ```bash
 bash scripts/setup-sandbox.sh
 ```
 
-`/tmp/strand-sandbox/` に以下が作られる:
+This creates the following in `/tmp/strand-sandbox/`:
 
-- issue 30件（P0〜P4、bug/feature/task/chore混在）
-- closed 5件（完了理由付き）
-- 依存関係 15本（チェーン、扇形、合流を含む）
+- 30 issues (P0–P4, mix of bug/feature/task/chore)
+- 5 closed issues (with completion reasons)
+- 15 dependencies (chains, fan-out, and convergence patterns)
 
-再実行すると既存のサンドボックスを削除して作り直す。
+Re-running the script deletes and recreates the existing sandbox.
 
-### TUI起動
+### Launch TUI
 
 ```bash
 cargo run -- --dir /tmp/strand-sandbox
 ```
 
-### キー操作
+### Key Bindings
 
-| キー | 操作 |
-|------|------|
-| `j` / `↓` | 次のissue |
-| `k` / `↑` | 前のissue |
-| `Enter` | 詳細表示 / 戻る |
-| `q` | 終了 |
+| Key       | Action             |
+| --------- | ------------------ |
+| `j` / `↓` | Next issue         |
+| `k` / `↑` | Previous issue     |
+| `Enter`   | Toggle detail view |
+| `q`       | Quit               |
