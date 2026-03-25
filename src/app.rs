@@ -100,13 +100,13 @@ impl App {
 
     pub fn next(&mut self) {
         if !self.issues.is_empty() {
-            self.selected = (self.selected + 1) % self.issues.len();
+            self.selected = (self.selected + 1).min(self.issues.len() - 1);
         }
     }
 
     pub fn previous(&mut self) {
         if !self.issues.is_empty() {
-            self.selected = (self.selected + self.issues.len() - 1) % self.issues.len();
+            self.selected = self.selected.saturating_sub(1);
         }
     }
 
