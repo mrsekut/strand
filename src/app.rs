@@ -190,9 +190,11 @@ impl App {
                 self.enriching_ids.remove(&issue_id);
                 self.notification = Some((format!("Enriched: {issue_id}"), Instant::now()));
                 let _ = self.load_issues().await;
-                // enrich完了後、自動でimplementを開始
+                // enrich完了後、p0-p1のみ自動でimplementを開始
                 if let Some(issue) = self.issues.iter().find(|i| i.id == issue_id).cloned() {
-                    self.start_implement_issue(&issue);
+                    if issue.priority.map_or(false, |p| p <= 1) {
+                        self.start_implement_issue(&issue);
+                    }
                 }
             }
             EnrichEvent::Failed { issue_id, error } => {
