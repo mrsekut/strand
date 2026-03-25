@@ -134,6 +134,10 @@ fn draw_detail(frame: &mut Frame, app: &App) {
         return;
     };
 
+    let area = frame.area().inner(Margin {
+        horizontal: 2,
+        vertical: 1,
+    });
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -141,7 +145,7 @@ fn draw_detail(frame: &mut Frame, app: &App) {
             Constraint::Length(1),
             Constraint::Length(1),
         ])
-        .split(frame.area());
+        .split(area);
 
     let priority = issue
         .priority
