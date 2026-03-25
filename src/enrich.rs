@@ -101,9 +101,15 @@ fn extract_json(s: &str) -> Result<&str> {
         }
     }
 
+    let preview_end = trimmed
+        .char_indices()
+        .map(|(i, _)| i)
+        .take_while(|&i| i <= 200)
+        .last()
+        .unwrap_or(0);
     anyhow::bail!(
         "No JSON object found in response: {}",
-        &trimmed[..trimmed.len().min(200)]
+        &trimmed[..preview_end]
     );
 }
 
