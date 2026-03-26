@@ -211,7 +211,7 @@ fn draw_detail(frame: &mut Frame, app: &App) {
         lines.push(Line::from(impl_spans));
 
         // Impl-related keys
-        let mut impl_keys: Vec<(&str, &str)> = vec![("p", "path")];
+        let mut impl_keys: Vec<(&str, &str)> = vec![("p", "copy path")];
         if matches!(job.status, ImplStatus::Done) {
             impl_keys.push(("m", "merge"));
             impl_keys.push(("d", "discard"));
