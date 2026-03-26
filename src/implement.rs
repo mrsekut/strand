@@ -83,53 +83,33 @@ async fn create_worktree(repo_dir: &PathBuf, issue_id: &str) -> Result<(PathBuf,
     Ok((wt_path, branch))
 }
 
-pub async fn remove_worktree(repo_dir: &PathBuf, worktree_path: &PathBuf) -> Result<()> {
+async fn run_git(repo_dir: &Path, args: &[&str]) -> Result<()> {
     let output = Command::new("git")
-        .args(["worktree", "remove", "--force"])
-        .arg(worktree_path)
+        .args(args)
         .current_dir(repo_dir)
         .output()
         .await?;
-
     if !output.status.success() {
         anyhow::bail!(
-            "git worktree remove failed: {}",
+            "git {} failed: {}",
+            args.first().unwrap_or(&""),
             String::from_utf8_lossy(&output.stderr)
         );
     }
     Ok(())
+}
+
+pub async fn remove_worktree(repo_dir: &PathBuf, worktree_path: &PathBuf) -> Result<()> {
+    let wt = worktree_path.to_string_lossy();
+    run_git(repo_dir, ["worktree", "remove", "--force", &wt].as_slice()).await
 }
 
 pub async fn delete_branch(repo_dir: &PathBuf, branch: &str) -> Result<()> {
-    let output = Command::new("git")
-        .args(["branch", "-D", branch])
-        .current_dir(repo_dir)
-        .output()
-        .await?;
-
-    if !output.status.success() {
-        anyhow::bail!(
-            "git branch -D failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-    Ok(())
+    run_git(repo_dir, ["branch", "-D", branch].as_slice()).await
 }
 
 pub async fn merge_branch(repo_dir: &PathBuf, branch: &str) -> Result<()> {
-    let output = Command::new("git")
-        .args(["merge", branch])
-        .current_dir(repo_dir)
-        .output()
-        .await?;
-
-    if !output.status.success() {
-        anyhow::bail!(
-            "git merge failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-    Ok(())
+    run_git(repo_dir, ["merge", branch].as_slice()).await
 }
 
 /// 既存のgit worktreeからImplJobを復元する
