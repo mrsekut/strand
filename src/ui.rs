@@ -3,6 +3,8 @@ use ratatui::{
     widgets::{Cell, Paragraph, Row, Table, TableState, Wrap},
 };
 
+use chrono::{DateTime, FixedOffset};
+
 use crate::app::App;
 use crate::bd::{self, Issue};
 use crate::implement::ImplStatus;
@@ -12,6 +14,13 @@ pub fn draw(frame: &mut Frame, app: &App) {
         draw_detail(frame, app);
     } else {
         draw_list(frame, app);
+    }
+}
+
+fn format_timestamp(iso: &str) -> String {
+    match iso.parse::<DateTime<FixedOffset>>() {
+        Ok(dt) => dt.format("%m/%d %H:%M").to_string(),
+        Err(_) => iso.to_string(),
     }
 }
 
@@ -197,6 +206,49 @@ fn draw_detail(frame: &mut Frame, app: &App) {
             Span::raw(job.worktree_path.to_string_lossy().to_string()),
         ]));
         lines.push(Line::from(""));
+    }
+
+    // Timestamps
+    {
+        let impl_completed = app
+            .impl_jobs
+            .get(&issue.id)
+            .and_then(|j| j.completed_at.as_deref());
+        let desc_updated = issue.updated_at.as_deref();
+
+        if desc_updated.is_some() || impl_completed.is_some() {
+            let mut ts_spans: Vec<Span> = Vec::new();
+
+            if let Some(dt) = desc_updated {
+                ts_spans.push(Span::styled("Desc: ", Style::default().fg(Color::Cyan)));
+                ts_spans.push(Span::raw(format_timestamp(dt)));
+            }
+
+            if let Some(dt) = impl_completed {
+                if !ts_spans.is_empty() {
+                    ts_spans.push(Span::styled("  │  ", Style::default().fg(Color::DarkGray)));
+                }
+                ts_spans.push(Span::styled("Impl: ", Style::default().fg(Color::Cyan)));
+                ts_spans.push(Span::raw(format_timestamp(dt)));
+            }
+
+            // desc > impl なら desc が新しい（implが古い）ことを警告
+            if let (Some(d), Some(i)) = (desc_updated, impl_completed) {
+                let d_parsed = d.parse::<DateTime<FixedOffset>>().ok();
+                let i_parsed = i.parse::<DateTime<FixedOffset>>().ok();
+                if let (Some(dp), Some(ip)) = (d_parsed, i_parsed) {
+                    if dp > ip {
+                        ts_spans.push(Span::styled(
+                            "  ⚠ impl is stale",
+                            Style::default().fg(Color::Yellow),
+                        ));
+                    }
+                }
+            }
+
+            lines.push(Line::from(ts_spans));
+            lines.push(Line::from(""));
+        }
     }
 
     let desc = issue.description.as_deref().unwrap_or("(no description)");
