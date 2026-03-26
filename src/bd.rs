@@ -55,6 +55,12 @@ pub async fn update_title(dir: Option<&str>, id: &str, title: &str) -> Result<()
     Ok(())
 }
 
+pub async fn get_issue(dir: Option<&str>, id: &str) -> Result<Issue> {
+    let stdout = run_bd(dir, ["show", id, "--json"].as_slice()).await?;
+    let issue: Issue = serde_json::from_slice(&stdout)?;
+    Ok(issue)
+}
+
 pub async fn update_description(dir: Option<&str>, id: &str, description: &str) -> Result<()> {
     run_bd(dir, ["update", id, "--description", description].as_slice()).await?;
     Ok(())

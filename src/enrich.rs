@@ -192,7 +192,11 @@ async fn run_inner(request: &EnrichRequest, dir: Option<&str>) -> Result<()> {
     let stdout = String::from_utf8(output.stdout)?;
     let enrich_result = parse_result(&stdout)?;
 
-    let description = format_enriched(request.description.as_deref(), &enrich_result);
+    // enrich実行中にユーザーがdescを編集している可能性があるため、
+    // 書き込み直前に最新のdescを再取得してappendする
+    let current_issue = bd::get_issue(dir, &request.issue_id).await?;
+    let current_desc = current_issue.description.as_deref();
+    let description = format_enriched(current_desc, &enrich_result);
 
     bd::update_description(dir, &request.issue_id, &description).await?;
     bd::add_label(dir, &request.issue_id, "enriched").await?;
