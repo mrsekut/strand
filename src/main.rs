@@ -152,6 +152,7 @@ async fn handle_detail_key(
         KeyCode::Down => app.next(),
         KeyCode::Up => app.previous(),
         KeyCode::Char('c') => app.copy_id(),
+        KeyCode::Char('p') => app.copy_worktree_path(),
         KeyCode::Char('e') => app.edit_description(terminal).await,
         KeyCode::Char('m') => app.merge_impl().await,
         KeyCode::Char('d') => app.discard_impl().await,

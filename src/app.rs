@@ -431,6 +431,36 @@ impl App {
         }
     }
 
+    pub fn copy_worktree_path(&mut self) {
+        let Some(issue) = self.selected_issue() else {
+            return;
+        };
+        let job = self.impl_jobs.get(&issue.id);
+        let Some(job) = job else {
+            self.notify("No impl job found");
+            return;
+        };
+        let path = job.worktree_path.display().to_string();
+
+        let result = std::process::Command::new("pbcopy")
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+            .and_then(|mut child| {
+                use std::io::Write;
+                child.stdin.as_mut().unwrap().write_all(path.as_bytes())?;
+                child.wait()
+            });
+
+        match result {
+            Ok(_) => {
+                self.notify(format!("Copied: {path}"));
+            }
+            Err(e) => {
+                self.notify(format!("Copy failed: {e}"));
+            }
+        }
+    }
+
     // --- Edit Description ---
 
     pub async fn edit_description(
