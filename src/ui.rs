@@ -219,7 +219,7 @@ fn keybar_line(keys: &[(&str, &str)]) -> Line<'static> {
         .add_modifier(Modifier::BOLD);
     let desc_style = Style::default().fg(Color::DarkGray);
 
-    let mut spans = Vec::new();
+    let mut spans = vec![Span::raw(" ")];
     for (i, (key, desc)) in keys.iter().enumerate() {
         if i > 0 {
             spans.push(Span::styled(" │ ", sep_style));
@@ -286,7 +286,7 @@ fn draw_detail_keybar(frame: &mut Frame, app: &App, area: Rect) {
 fn draw_notification(frame: &mut Frame, app: &App, area: Rect) {
     if let Some((msg, time)) = &app.notification {
         if time.elapsed().as_secs() < 5 {
-            let status = Paragraph::new(msg.as_str()).style(Style::default().fg(Color::Yellow));
+            let status = Paragraph::new(format!(" {msg}")).style(Style::default().fg(Color::Yellow));
             frame.render_widget(status, area);
         }
     }
