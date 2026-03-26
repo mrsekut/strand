@@ -80,11 +80,7 @@ impl App {
     }
 
     fn beads_db_path(&self) -> PathBuf {
-        let base = match &self.dir {
-            Some(d) => PathBuf::from(d),
-            None => std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
-        };
-        base.join(".beads").join("beads.db")
+        self.repo_dir().join(".beads").join("beads.db")
     }
 
     fn db_mtime(&self) -> Option<SystemTime> {
