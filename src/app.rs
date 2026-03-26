@@ -60,6 +60,10 @@ impl App {
         }
     }
 
+    fn notify(&mut self, msg: impl Into<String>) {
+        self.notification = Some((msg.into(), Instant::now()));
+    }
+
     pub async fn load_issues(&mut self) -> Result<()> {
         self.issues = bd::list_issues(self.dir.as_deref()).await?;
         self.last_db_mtime = self.db_mtime();
@@ -184,11 +188,11 @@ impl App {
     pub async fn handle_enrich_event(&mut self, event: EnrichEvent) {
         match event {
             EnrichEvent::Started { issue_id } => {
-                self.notification = Some((format!("Enriching: {issue_id}..."), Instant::now()));
+                self.notify(format!("Enriching: {issue_id}..."));
             }
             EnrichEvent::Completed { issue_id } => {
                 self.enriching_ids.remove(&issue_id);
-                self.notification = Some((format!("Enriched: {issue_id}"), Instant::now()));
+                self.notify(format!("Enriched: {issue_id}"));
                 let _ = self.load_issues().await;
                 // enrich完了後、p0-p1のみ自動でimplementを開始
                 if let Some(issue) = self.issues.iter().find(|i| i.id == issue_id).cloned() {
@@ -199,10 +203,7 @@ impl App {
             }
             EnrichEvent::Failed { issue_id, error } => {
                 self.enriching_ids.remove(&issue_id);
-                self.notification = Some((
-                    format!("Enrich failed: {issue_id}: {error}"),
-                    Instant::now(),
-                ));
+                self.notify(format!("Enrich failed: {issue_id}: {error}"));
             }
         }
     }
@@ -263,23 +264,19 @@ impl App {
     pub fn handle_impl_event(&mut self, event: ImplEvent) {
         match event {
             ImplEvent::Started { issue_id } => {
-                self.notification = Some((format!("Implementing: {issue_id}..."), Instant::now()));
+                self.notify(format!("Implementing: {issue_id}..."));
             }
             ImplEvent::Completed { issue_id } => {
                 if let Some(job) = self.impl_jobs.get_mut(&issue_id) {
                     job.status = ImplStatus::Done;
                 }
-                self.notification =
-                    Some((format!("Implementation done: {issue_id}"), Instant::now()));
+                self.notify(format!("Implementation done: {issue_id}"));
             }
             ImplEvent::Failed { issue_id, error } => {
                 if let Some(job) = self.impl_jobs.get_mut(&issue_id) {
                     job.status = ImplStatus::Failed(error.clone());
                 }
-                self.notification = Some((
-                    format!("Implement failed: {issue_id}: {error}"),
-                    Instant::now(),
-                ));
+                self.notify(format!("Implement failed: {issue_id}: {error}"));
             }
         }
     }
@@ -298,12 +295,12 @@ impl App {
         let repo_dir = self.repo_dir();
 
         if let Err(e) = implement::merge_branch(&repo_dir, &job.branch).await {
-            self.notification = Some((format!("Merge failed: {e}"), Instant::now()));
+            self.notify(format!("Merge failed: {e}"));
             return;
         }
 
         if let Err(e) = implement::remove_worktree(&repo_dir, &job.worktree_path).await {
-            self.notification = Some((format!("Worktree remove failed: {e}"), Instant::now()));
+            self.notify(format!("Worktree remove failed: {e}"));
             return;
         }
 
@@ -311,7 +308,7 @@ impl App {
         let _ = bd::close_issue(self.dir.as_deref(), &issue_id).await;
 
         self.impl_jobs.remove(&issue_id);
-        self.notification = Some((format!("Merged & closed: {issue_id}"), Instant::now()));
+        self.notify(format!("Merged & closed: {issue_id}"));
         let _ = self.load_issues().await;
     }
 
@@ -329,14 +326,14 @@ impl App {
         let repo_dir = self.repo_dir();
 
         if let Err(e) = implement::remove_worktree(&repo_dir, &job.worktree_path).await {
-            self.notification = Some((format!("Worktree remove failed: {e}"), Instant::now()));
+            self.notify(format!("Worktree remove failed: {e}"));
             return;
         }
 
         let _ = implement::delete_branch(&repo_dir, &job.branch).await;
 
         self.impl_jobs.remove(&issue_id);
-        self.notification = Some((format!("Discarded: {issue_id}"), Instant::now()));
+        self.notify(format!("Discarded: {issue_id}"));
     }
 
     // --- Close Issue ---
@@ -349,14 +346,14 @@ impl App {
 
         match bd::close_issue(self.dir.as_deref(), &issue_id).await {
             Ok(_) => {
-                self.notification = Some((format!("Closed: {issue_id}"), Instant::now()));
+                self.notify(format!("Closed: {issue_id}"));
                 let _ = self.load_issues().await;
                 if self.selected >= self.issues.len() && self.selected > 0 {
                     self.selected -= 1;
                 }
             }
             Err(e) => {
-                self.notification = Some((format!("Close failed: {e}"), Instant::now()));
+                self.notify(format!("Close failed: {e}"));
             }
         }
     }
@@ -371,14 +368,11 @@ impl App {
 
         match bd::update_priority(self.dir.as_deref(), &issue_id, priority).await {
             Ok(_) => {
-                self.notification = Some((
-                    format!("Priority set: {issue_id} → P{priority}"),
-                    Instant::now(),
-                ));
+                self.notify(format!("Priority set: {issue_id} → P{priority}"));
                 let _ = self.load_issues().await;
             }
             Err(e) => {
-                self.notification = Some((format!("Priority update failed: {e}"), Instant::now()));
+                self.notify(format!("Priority update failed: {e}"));
             }
         }
     }
@@ -414,10 +408,10 @@ impl App {
 
         match result {
             Ok(_) => {
-                self.notification = Some((format!("Copied: {id}"), Instant::now()));
+                self.notify(format!("Copied: {id}"));
             }
             Err(e) => {
-                self.notification = Some((format!("Copy failed: {e}"), Instant::now()));
+                self.notify(format!("Copy failed: {e}"));
             }
         }
     }
@@ -439,7 +433,7 @@ impl App {
         let content = format!("{}\n\n{}", current_title, current_desc);
         let tmp = std::env::temp_dir().join(format!("strand-{issue_id}.md"));
         if std::fs::write(&tmp, &content).is_err() {
-            self.notification = Some(("Failed to create temp file".into(), Instant::now()));
+            self.notify("Failed to create temp file");
             return;
         }
 
@@ -478,8 +472,7 @@ impl App {
                             if let Err(e) =
                                 bd::update_title(self.dir.as_deref(), &issue_id, &new_title).await
                             {
-                                self.notification =
-                                    Some((format!("Title update failed: {e}"), Instant::now()));
+                                self.notify(format!("Title update failed: {e}"));
                                 ok = false;
                             }
                         }
@@ -488,23 +481,19 @@ impl App {
                                 bd::update_description(self.dir.as_deref(), &issue_id, &new_desc)
                                     .await
                             {
-                                self.notification = Some((
-                                    format!("Description update failed: {e}"),
-                                    Instant::now(),
-                                ));
+                                self.notify(format!("Description update failed: {e}"));
                                 ok = false;
                             }
                         }
                         if ok {
-                            self.notification =
-                                Some((format!("Updated: {issue_id}"), Instant::now()));
+                            self.notify(format!("Updated: {issue_id}"));
                             let _ = self.load_issues().await;
                         }
                     }
                 }
             }
             _ => {
-                self.notification = Some(("Editor exited with error".into(), Instant::now()));
+                self.notify("Editor exited with error");
             }
         }
 
