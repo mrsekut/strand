@@ -24,20 +24,21 @@ fn bd_command(dir: Option<&str>) -> Command {
     cmd
 }
 
-pub async fn list_issues(dir: Option<&str>) -> Result<Vec<Issue>> {
-    let output = bd_command(dir)
-        .args(["list", "--json", "--limit", "0", "--all"])
-        .output()
-        .await?;
-
+async fn run_bd(dir: Option<&str>, args: &[&str]) -> Result<Vec<u8>> {
+    let output = bd_command(dir).args(args).output().await?;
     if !output.status.success() {
         anyhow::bail!(
-            "bd list failed: {}",
+            "bd {} failed: {}",
+            args.first().unwrap_or(&""),
             String::from_utf8_lossy(&output.stderr)
         );
     }
+    Ok(output.stdout)
+}
 
-    let issues: Vec<Issue> = serde_json::from_slice(&output.stdout)?;
+pub async fn list_issues(dir: Option<&str>) -> Result<Vec<Issue>> {
+    let stdout = run_bd(dir, ["list", "--json", "--limit", "0", "--all"].as_slice()).await?;
+    let issues: Vec<Issue> = serde_json::from_slice(&stdout)?;
     let issues = issues
         .into_iter()
         .filter(|i| i.status != "closed")
@@ -46,84 +47,32 @@ pub async fn list_issues(dir: Option<&str>) -> Result<Vec<Issue>> {
 }
 
 pub async fn update_title(dir: Option<&str>, id: &str, title: &str) -> Result<()> {
-    let output = bd_command(dir)
-        .args(["update", id, "--title", title])
-        .output()
-        .await?;
-    if !output.status.success() {
-        anyhow::bail!(
-            "bd update title failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
+    run_bd(dir, ["update", id, "--title", title].as_slice()).await?;
     Ok(())
 }
 
 pub async fn update_description(dir: Option<&str>, id: &str, description: &str) -> Result<()> {
-    let output = bd_command(dir)
-        .args(["update", id, "--description", description])
-        .output()
-        .await?;
-    if !output.status.success() {
-        anyhow::bail!(
-            "bd update description failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
+    run_bd(dir, ["update", id, "--description", description].as_slice()).await?;
     Ok(())
 }
 
-
-
 pub async fn update_priority(dir: Option<&str>, id: &str, priority: u8) -> Result<()> {
-    let output = bd_command(dir)
-        .args(["update", id, "--priority", &priority.to_string()])
-        .output()
-        .await?;
-    if !output.status.success() {
-        anyhow::bail!(
-            "bd update priority failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
+    let p = priority.to_string();
+    run_bd(dir, ["update", id, "--priority", &p].as_slice()).await?;
     Ok(())
 }
 
 pub async fn close_issue(dir: Option<&str>, id: &str) -> Result<()> {
-    let output = bd_command(dir).args(["close", id]).output().await?;
-    if !output.status.success() {
-        anyhow::bail!(
-            "bd close failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
+    run_bd(dir, ["close", id].as_slice()).await?;
     Ok(())
 }
 
 pub async fn remove_label(dir: Option<&str>, id: &str, label: &str) -> Result<()> {
-    let output = bd_command(dir)
-        .args(["label", "remove", id, label])
-        .output()
-        .await?;
-    if !output.status.success() {
-        anyhow::bail!(
-            "bd label remove failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
+    run_bd(dir, ["label", "remove", id, label].as_slice()).await?;
     Ok(())
 }
 
 pub async fn add_label(dir: Option<&str>, id: &str, label: &str) -> Result<()> {
-    let output = bd_command(dir)
-        .args(["label", "add", id, label])
-        .output()
-        .await?;
-    if !output.status.success() {
-        anyhow::bail!(
-            "bd label add failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
+    run_bd(dir, ["label", "add", id, label].as_slice()).await?;
     Ok(())
 }
