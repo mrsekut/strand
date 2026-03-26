@@ -375,6 +375,20 @@ impl App {
             Ok(_) => {
                 self.notify(format!("Priority set: {issue_id} → P{priority}"));
                 let _ = self.load_issues().await;
+
+                // p0/p1に設定された場合、自動でenrich→implementを開始
+                if priority <= 1 {
+                    if let Some(issue) = self.issues.iter().find(|i| i.id == issue_id).cloned() {
+                        if self.impl_jobs.contains_key(&issue_id) {
+                            // already running
+                        } else if issue.labels.contains(&"enriched".to_string()) {
+                            self.start_implement_issue(&issue);
+                        } else {
+                            // enrich開始 → enrich完了時にauto-implが発火する
+                            self.enrich_issue(issue);
+                        }
+                    }
+                }
             }
             Err(e) => {
                 self.notify(format!("Priority update failed: {e}"));
