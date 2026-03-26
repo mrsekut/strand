@@ -170,7 +170,7 @@ impl App {
             .issues
             .iter()
             .filter(|issue| {
-                !issue.labels.contains(&"enriched".to_string())
+                !issue.labels.contains(&"strand-enriched".to_string())
                     && !self.enriching_ids.contains(&issue.id)
             })
             .cloned()
@@ -206,7 +206,7 @@ impl App {
         }
         if let Some(issue) = self.issues.iter().find(|i| i.id == issue_id).cloned() {
             let is_high_priority = issue.priority.map_or(false, |p| p <= 1);
-            let is_enriched = issue.labels.contains(&"enriched".to_string());
+            let is_enriched = issue.labels.contains(&"strand-enriched".to_string());
             if is_high_priority && is_enriched {
                 self.start_implement_issue(&issue);
             }
@@ -388,7 +388,7 @@ impl App {
                 // p0/p1に設定された場合、未enrichならenrich開始（完了時にauto-implが発火）
                 if priority <= 1 {
                     if let Some(issue) = self.issues.iter().find(|i| i.id == issue_id).cloned() {
-                        if !issue.labels.contains(&"enriched".to_string())
+                        if !issue.labels.contains(&"strand-enriched".to_string())
                             && !self.enriching_ids.contains(&issue_id)
                         {
                             self.enrich_issue(issue);
