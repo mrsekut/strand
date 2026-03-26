@@ -26,7 +26,8 @@ fn format_timestamp(iso: &str) -> String {
 
 fn priority_style(priority: Option<u8>) -> Style {
     match priority {
-        Some(0 | 1) => Style::default().fg(Color::Red),
+        Some(0) => Style::default().fg(Color::Magenta),
+        Some(1) => Style::default().fg(Color::Red),
         Some(2) => Style::default().fg(Color::Yellow),
         Some(_) => Style::default().fg(Color::DarkGray),
         None => Style::default().fg(Color::DarkGray),
@@ -39,15 +40,6 @@ fn status_style(status: &str) -> Style {
         "in_progress" => Style::default().fg(Color::Cyan),
         "deferred" => Style::default().fg(Color::Blue),
         _ => Style::default().fg(Color::DarkGray),
-    }
-}
-
-fn short_status(status: &str) -> &str {
-    match status {
-        "in_progress" => "prog",
-        "deferred" => "defer",
-        "closed" => "close",
-        s => s,
     }
 }
 
@@ -74,7 +66,6 @@ fn issue_row<'a>(issue: &'a Issue, icon: &'a str, icon_style: Style) -> Row<'a> 
     Row::new(vec![
         Cell::from(icon).style(icon_style),
         Cell::from(bd::short_id(&issue.id).to_string()).style(Style::default().fg(Color::DarkGray)),
-        Cell::from(short_status(&issue.status).to_string()).style(status_style(&issue.status)),
         Cell::from(priority_text).style(priority_style(issue.priority)),
         Cell::from(issue.title.clone()),
     ])
@@ -93,7 +84,6 @@ fn draw_list(frame: &mut Frame, app: &App) {
     let header = Row::new(vec![
         Cell::from(""),
         Cell::from("ID"),
-        Cell::from("Status"),
         Cell::from("Pri"),
         Cell::from("Title"),
     ])
@@ -115,7 +105,6 @@ fn draw_list(frame: &mut Frame, app: &App) {
     let widths = [
         Constraint::Length(2),
         Constraint::Length(4),
-        Constraint::Length(6),
         Constraint::Length(3),
         Constraint::Min(10),
     ];
