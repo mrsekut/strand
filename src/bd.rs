@@ -40,6 +40,25 @@ async fn run_bd(dir: Option<&str>, args: &[&str]) -> Result<Vec<u8>> {
     Ok(output.stdout)
 }
 
+/// bd未初期化ならエラーメッセージを表示して終了する
+pub fn check_init(dir: Option<&str>) -> Result<()> {
+    let base = match dir {
+        Some(d) => std::path::PathBuf::from(d),
+        None => std::env::current_dir()?,
+    };
+    let beads_dir = base.join(".beads");
+    if beads_dir.exists() {
+        return Ok(());
+    }
+
+    anyhow::bail!(
+        "Beads is not initialized in this repository.\n\
+         Please run the following commands first:\n\n\
+         \x20 bd init\n\
+         \x20 bd setup claude"
+    );
+}
+
 pub async fn list_issues(dir: Option<&str>) -> Result<Vec<Issue>> {
     let stdout = run_bd(dir, ["list", "--json", "--limit", "0", "--all"].as_slice()).await?;
     let issues: Vec<Issue> = serde_json::from_slice(&stdout)?;

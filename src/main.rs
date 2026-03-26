@@ -23,6 +23,8 @@ async fn main() -> Result<()> {
         .position(|a| a == "--dir")
         .and_then(|i| std::env::args().nth(i + 1));
 
+    bd::check_init(dir.as_deref())?;
+
     let mut app = App::new(dir);
     app.load_issues().await?;
     app.restore_impl_jobs().await;
