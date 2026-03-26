@@ -144,17 +144,30 @@ async fn handle_detail_key(
     app: &mut App,
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
 ) {
-    if let InputMode::AwaitingConfirm(action) = app.input_mode {
-        app.input_mode = InputMode::Normal;
-        app.notification = None;
-        if let KeyCode::Char('y') = key {
-            match action {
-                ConfirmAction::Close => app.close_issue().await,
-                ConfirmAction::Merge => app.merge_impl().await,
-                ConfirmAction::Discard => app.discard_impl().await,
+    match app.input_mode {
+        InputMode::AwaitingAI => {
+            app.input_mode = InputMode::Normal;
+            app.notification = None;
+            match key {
+                KeyCode::Char('e') => app.start_enrich(),
+                KeyCode::Char('i') => app.start_implement(),
+                _ => {}
             }
+            return;
         }
-        return;
+        InputMode::AwaitingConfirm(action) => {
+            app.input_mode = InputMode::Normal;
+            app.notification = None;
+            if let KeyCode::Char('y') = key {
+                match action {
+                    ConfirmAction::Close => app.close_issue().await,
+                    ConfirmAction::Merge => app.merge_impl().await,
+                    ConfirmAction::Discard => app.discard_impl().await,
+                }
+            }
+            return;
+        }
+        _ => {}
     }
 
     match key {
@@ -171,6 +184,10 @@ async fn handle_detail_key(
         KeyCode::Char('d') => {
             app.input_mode = InputMode::AwaitingConfirm(ConfirmAction::Discard);
             app.notification = Some(("Discard? (y/n)".into(), std::time::Instant::now()));
+        }
+        KeyCode::Char('a') => {
+            app.input_mode = InputMode::AwaitingAI;
+            app.notification = Some(("a-...".into(), std::time::Instant::now()));
         }
         KeyCode::Char('x') => {
             app.input_mode = InputMode::AwaitingConfirm(ConfirmAction::Close);

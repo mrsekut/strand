@@ -287,25 +287,25 @@ fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
 fn draw_detail_keybar(frame: &mut Frame, app: &App, area: Rect) {
     use crate::app::{ConfirmAction, InputMode};
 
-    if let InputMode::AwaitingConfirm(action) = app.input_mode {
-        let label = match action {
-            ConfirmAction::Close => "confirm close",
-            ConfirmAction::Merge => "confirm merge",
-            ConfirmAction::Discard => "confirm discard",
-        };
-        let keys: Vec<(&str, &str)> = vec![("y", label), ("n", "cancel")];
-        let line = padded_keybar_line(&keys);
-        frame.render_widget(Paragraph::new(line), area);
-        return;
-    }
-
-    let keys: Vec<(&str, &str)> = vec![
-        ("Esc", "back"),
-        ("c", "copy id"),
-        ("e", "edit"),
-        ("x", "close"),
-        ("q", "quit"),
-    ];
+    let keys: Vec<(&str, &str)> = match app.input_mode {
+        InputMode::AwaitingAI => vec![("e", "enrich"), ("i", "implement"), ("Esc", "cancel")],
+        InputMode::AwaitingConfirm(action) => {
+            let label = match action {
+                ConfirmAction::Close => "confirm close",
+                ConfirmAction::Merge => "confirm merge",
+                ConfirmAction::Discard => "confirm discard",
+            };
+            vec![("y", label), ("n", "cancel")]
+        }
+        _ => vec![
+            ("Esc", "back"),
+            ("c", "copy id"),
+            ("e", "edit"),
+            ("a", "ai"),
+            ("x", "close"),
+            ("q", "quit"),
+        ],
+    };
 
     let line = padded_keybar_line(&keys);
     frame.render_widget(Paragraph::new(line), area);
