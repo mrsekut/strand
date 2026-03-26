@@ -19,6 +19,7 @@ pub struct ImplJob {
     pub branch: String,
     pub worktree_path: PathBuf,
     pub status: ImplStatus,
+    pub completed_at: Option<String>,
 }
 
 pub enum ImplEvent {
@@ -172,9 +173,17 @@ pub async fn discover_worktrees(repo_dir: &Path, issue_ids: &[String]) -> Vec<Im
         let branch = branch_name(&issue_id);
 
         // masterとの差分でstatus判定
-        let status = match has_commits(repo_dir, &branch).await {
+        let has = has_commits(repo_dir, &branch).await;
+        let status = match has {
             true => ImplStatus::Done,
             false => ImplStatus::Failed("interrupted".to_string()),
+        };
+
+        // Doneの場合、ブランチの最新commit日時を取得
+        let completed_at = if has {
+            latest_commit_date(repo_dir, &branch).await
+        } else {
+            None
         };
 
         jobs.push(ImplJob {
@@ -182,10 +191,23 @@ pub async fn discover_worktrees(repo_dir: &Path, issue_ids: &[String]) -> Vec<Im
             branch,
             worktree_path: wt_path,
             status,
+            completed_at,
         });
     }
 
     jobs
+}
+
+/// ブランチの最新commit日時をISO 8601で取得
+async fn latest_commit_date(repo_dir: &Path, branch: &str) -> Option<String> {
+    let output = Command::new("git")
+        .args(["log", "-1", "--format=%aI", branch])
+        .current_dir(repo_dir)
+        .output()
+        .await
+        .ok()?;
+    let date = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if date.is_empty() { None } else { Some(date) }
 }
 
 async fn has_commits(repo_dir: &Path, branch: &str) -> bool {

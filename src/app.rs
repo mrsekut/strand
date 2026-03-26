@@ -249,6 +249,7 @@ impl App {
                 branch: branch.clone(),
                 worktree_path: wt_path,
                 status: ImplStatus::Running,
+                completed_at: None,
             },
         );
 
@@ -274,6 +275,7 @@ impl App {
             ImplEvent::Completed { issue_id, summary } => {
                 if let Some(job) = self.impl_jobs.get_mut(&issue_id) {
                     job.status = ImplStatus::Done;
+                    job.completed_at = Some(chrono::Local::now().to_rfc3339());
                 }
                 let summary_len = summary.len();
                 let dir = self.repo_dir().to_string_lossy().to_string();

@@ -14,6 +14,8 @@ pub struct Issue {
     pub description: Option<String>,
     #[serde(default)]
     pub labels: Vec<String>,
+    #[serde(default)]
+    pub updated_at: Option<String>,
 }
 
 pub fn short_id(id: &str) -> &str {
