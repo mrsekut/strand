@@ -221,9 +221,8 @@ fn draw_detail(frame: &mut Frame, app: &App) {
     }
 
     let desc = issue.description.as_deref().unwrap_or("(no description)");
-    for l in desc.lines() {
-        lines.push(Line::from(l.to_string()));
-    }
+    let md_text = tui_markdown::from_str(desc);
+    lines.extend(md_text.lines);
 
     let paragraph = Paragraph::new(lines).wrap(Wrap { trim: false });
 
