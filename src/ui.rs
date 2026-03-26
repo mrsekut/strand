@@ -147,20 +147,15 @@ fn draw_detail(frame: &mut Frame, app: &App) {
         .unwrap_or_else(|| "N/A".into());
 
     let mut lines = vec![
+        Line::from(vec![Span::styled(
+            &issue.title,
+            Style::default().add_modifier(Modifier::BOLD),
+        )]),
         Line::from(vec![
-            Span::styled("ID: ", Style::default().fg(Color::Cyan)),
-            Span::raw(&issue.id),
-        ]),
-        Line::from(vec![
-            Span::styled("Title: ", Style::default().fg(Color::Cyan)),
-            Span::raw(&issue.title),
-        ]),
-        Line::from(vec![
-            Span::styled("Status: ", Style::default().fg(Color::Cyan)),
+            Span::styled(&issue.id, Style::default().fg(Color::DarkGray)),
+            Span::raw("  "),
             Span::styled(&issue.status, status_style(&issue.status)),
-        ]),
-        Line::from(vec![
-            Span::styled("Priority: ", Style::default().fg(Color::Cyan)),
+            Span::raw("  "),
             Span::styled(priority, priority_style(issue.priority)),
         ]),
         Line::from(""),
@@ -348,7 +343,8 @@ fn draw_detail_keybar(frame: &mut Frame, app: &App, area: Rect) {
 fn draw_notification(frame: &mut Frame, app: &App, area: Rect) {
     if let Some((msg, time)) = &app.notification {
         if time.elapsed().as_secs() < 5 {
-            let status = Paragraph::new(format!(" {msg}")).style(Style::default().fg(Color::Yellow));
+            let status =
+                Paragraph::new(format!(" {msg}")).style(Style::default().fg(Color::Yellow));
             frame.render_widget(status, area);
         }
     }
