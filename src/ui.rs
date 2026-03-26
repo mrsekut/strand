@@ -81,18 +81,6 @@ fn draw_list(frame: &mut Frame, app: &App) {
         ])
         .split(frame.area());
 
-    let header = Row::new(vec![
-        Cell::from(""),
-        Cell::from("ID"),
-        Cell::from("Pri"),
-        Cell::from("Title"),
-    ])
-    .style(
-        Style::default()
-            .fg(Color::Cyan)
-            .add_modifier(Modifier::BOLD),
-    );
-
     let rows: Vec<Row> = app
         .issues
         .iter()
@@ -110,7 +98,6 @@ fn draw_list(frame: &mut Frame, app: &App) {
     ];
 
     let table = Table::new(rows, widths)
-        .header(header)
         .row_highlight_style(Style::default().bg(Color::Rgb(70, 70, 90)))
         .highlight_symbol("▶ ");
 
