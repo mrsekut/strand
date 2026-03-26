@@ -128,10 +128,6 @@ fn draw_detail(frame: &mut Frame, app: &App) {
         return;
     };
 
-    let area = frame.area().inner(Margin {
-        horizontal: 2,
-        vertical: 1,
-    });
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -139,7 +135,12 @@ fn draw_detail(frame: &mut Frame, app: &App) {
             Constraint::Length(1),
             Constraint::Length(1),
         ])
-        .split(area);
+        .split(frame.area());
+
+    let content_area = chunks[0].inner(Margin {
+        horizontal: 2,
+        vertical: 1,
+    });
 
     let priority = issue
         .priority
@@ -163,76 +164,61 @@ fn draw_detail(frame: &mut Frame, app: &App) {
 
     // Impl job info
     if let Some(job) = app.impl_jobs.get(&issue.id) {
-        let (status_text, style) = match &job.status {
-            ImplStatus::Running => ("⚡ Implementing...", Style::default().fg(Color::Magenta)),
-            ImplStatus::Done => ("✓ Implementation done", Style::default().fg(Color::Green)),
-            ImplStatus::Failed(e) => {
-                lines.push(Line::from(vec![
-                    Span::styled("Impl: ", Style::default().fg(Color::Cyan)),
-                    Span::styled(format!("✗ Failed: {e}"), Style::default().fg(Color::Red)),
-                ]));
-                // skip the default push below
-                ("", Style::default())
+        let is_stale = {
+            let impl_completed = job.completed_at.as_deref();
+            let desc_updated = issue.updated_at.as_deref();
+            match (desc_updated, impl_completed) {
+                (Some(d), Some(i)) => {
+                    let d_parsed = d.parse::<DateTime<FixedOffset>>().ok();
+                    let i_parsed = i.parse::<DateTime<FixedOffset>>().ok();
+                    matches!((d_parsed, i_parsed), (Some(dp), Some(ip)) if dp > ip)
+                }
+                _ => false,
             }
         };
-        if !status_text.is_empty() {
-            lines.push(Line::from(vec![
-                Span::styled("Impl: ", Style::default().fg(Color::Cyan)),
-                Span::styled(status_text, style),
-            ]));
+
+        let mut impl_spans: Vec<Span> = match &job.status {
+            ImplStatus::Running => vec![
+                Span::styled("⚡ ", Style::default().fg(Color::Magenta)),
+                Span::styled(&job.branch, Style::default().fg(Color::Magenta)),
+            ],
+            ImplStatus::Done => vec![
+                Span::styled("✓ ", Style::default().fg(Color::Green)),
+                Span::raw(&job.branch),
+            ],
+            ImplStatus::Failed(e) => vec![
+                Span::styled("✗ ", Style::default().fg(Color::Red)),
+                Span::styled(&job.branch, Style::default().fg(Color::Red)),
+                Span::styled(format!("  {e}"), Style::default().fg(Color::Red)),
+            ],
+        };
+
+        if is_stale {
+            impl_spans.push(Span::styled(
+                "  ⚠ stale",
+                Style::default().fg(Color::Yellow),
+            ));
         }
-        lines.push(Line::from(vec![
-            Span::styled("Branch: ", Style::default().fg(Color::Cyan)),
-            Span::raw(&job.branch),
-        ]));
-        lines.push(Line::from(vec![
-            Span::styled("Worktree: ", Style::default().fg(Color::Cyan)),
-            Span::raw(job.worktree_path.to_string_lossy().to_string()),
-        ]));
+
+        lines.push(Line::from(impl_spans));
+
+        // Impl-related keys
+        let mut impl_keys: Vec<(&str, &str)> = vec![("p", "path")];
+        if matches!(job.status, ImplStatus::Done) {
+            impl_keys.push(("m", "merge"));
+            impl_keys.push(("d", "discard"));
+        }
+        lines.push(keybar_line(&impl_keys));
         lines.push(Line::from(""));
     }
 
-    // Timestamps
-    {
-        let impl_completed = app
-            .impl_jobs
-            .get(&issue.id)
-            .and_then(|j| j.completed_at.as_deref());
-        let desc_updated = issue.updated_at.as_deref();
-
-        if desc_updated.is_some() || impl_completed.is_some() {
-            let mut ts_spans: Vec<Span> = Vec::new();
-
-            if let Some(dt) = desc_updated {
-                ts_spans.push(Span::styled("Desc: ", Style::default().fg(Color::Cyan)));
-                ts_spans.push(Span::raw(format_timestamp(dt)));
-            }
-
-            if let Some(dt) = impl_completed {
-                if !ts_spans.is_empty() {
-                    ts_spans.push(Span::styled("  │  ", Style::default().fg(Color::DarkGray)));
-                }
-                ts_spans.push(Span::styled("Impl: ", Style::default().fg(Color::Cyan)));
-                ts_spans.push(Span::raw(format_timestamp(dt)));
-            }
-
-            // desc > impl なら desc が新しい（implが古い）ことを警告
-            if let (Some(d), Some(i)) = (desc_updated, impl_completed) {
-                let d_parsed = d.parse::<DateTime<FixedOffset>>().ok();
-                let i_parsed = i.parse::<DateTime<FixedOffset>>().ok();
-                if let (Some(dp), Some(ip)) = (d_parsed, i_parsed) {
-                    if dp > ip {
-                        ts_spans.push(Span::styled(
-                            "  ⚠ impl is stale",
-                            Style::default().fg(Color::Yellow),
-                        ));
-                    }
-                }
-            }
-
-            lines.push(Line::from(ts_spans));
-            lines.push(Line::from(""));
-        }
+    // Desc timestamp
+    if let Some(dt) = issue.updated_at.as_deref() {
+        lines.push(Line::from(vec![
+            Span::styled("Desc: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(format_timestamp(dt), Style::default().fg(Color::DarkGray)),
+        ]));
+        lines.push(Line::from(""));
     }
 
     let desc = issue.description.as_deref().unwrap_or("(no description)");
@@ -242,10 +228,16 @@ fn draw_detail(frame: &mut Frame, app: &App) {
 
     let paragraph = Paragraph::new(lines).wrap(Wrap { trim: false });
 
-    frame.render_widget(paragraph, chunks[0]);
+    frame.render_widget(paragraph, content_area);
 
     draw_detail_keybar(frame, app, chunks[1]);
     draw_notification(frame, app, chunks[2]);
+}
+
+fn padded_keybar_line(keys: &[(&str, &str)]) -> Line<'static> {
+    let mut line = keybar_line(keys);
+    line.spans.insert(0, Span::raw(" "));
+    line
 }
 
 fn keybar_line(keys: &[(&str, &str)]) -> Line<'static> {
@@ -255,7 +247,7 @@ fn keybar_line(keys: &[(&str, &str)]) -> Line<'static> {
         .add_modifier(Modifier::BOLD);
     let desc_style = Style::default().fg(Color::DarkGray);
 
-    let mut spans = vec![Span::raw(" ")];
+    let mut spans = Vec::new();
     for (i, (key, desc)) in keys.iter().enumerate() {
         if i > 0 {
             spans.push(Span::styled(" │ ", sep_style));
@@ -290,7 +282,7 @@ fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
         ],
     };
 
-    let line = keybar_line(&keys);
+    let line = padded_keybar_line(&keys);
     frame.render_widget(Paragraph::new(line), area);
 }
 
@@ -304,39 +296,20 @@ fn draw_detail_keybar(frame: &mut Frame, app: &App, area: Rect) {
             ConfirmAction::Discard => "confirm discard",
         };
         let keys: Vec<(&str, &str)> = vec![("y", label), ("n", "cancel")];
-        let line = keybar_line(&keys);
+        let line = padded_keybar_line(&keys);
         frame.render_widget(Paragraph::new(line), area);
         return;
     }
 
-    let issue = app.selected_issue();
-    let has_impl_done = issue.is_some_and(|i| {
-        app.impl_jobs
-            .get(&i.id)
-            .is_some_and(|j| matches!(j.status, ImplStatus::Done))
-    });
-
-    let has_impl = issue.is_some_and(|i| app.impl_jobs.contains_key(&i.id));
-
-    let mut keys: Vec<(&str, &str)> = vec![
+    let keys: Vec<(&str, &str)> = vec![
         ("Esc", "back"),
         ("c", "copy id"),
         ("e", "edit"),
         ("x", "close"),
+        ("q", "quit"),
     ];
 
-    if has_impl {
-        keys.push(("p", "copy path"));
-    }
-
-    if has_impl_done {
-        keys.push(("m", "merge"));
-        keys.push(("d", "discard"));
-    }
-
-    keys.push(("q", "quit"));
-
-    let line = keybar_line(&keys);
+    let line = padded_keybar_line(&keys);
     frame.render_widget(Paragraph::new(line), area);
 }
 
