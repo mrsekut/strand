@@ -23,7 +23,7 @@ pub struct ImplJob {
 
 pub enum ImplEvent {
     Started { issue_id: String },
-    Completed { issue_id: String },
+    Completed { issue_id: String, summary: String },
     Failed { issue_id: String, error: String },
 }
 
@@ -54,7 +54,28 @@ fn build_prompt(request: &ImplRequest) -> String {
         parts.push(format!("Design:\n{design}"));
     }
 
-    parts.push("上記のissueを実装してください。必要なファイルの作成・編集を行い、動作する状態にしてください。完了したらコミットしてください。".to_string());
+    parts.push(r#"Implement the issue above. Create or edit files as needed and leave the code in a working state.
+
+## Commit rules
+When done, commit your changes. The commit message body must record the background and reasoning behind the implementation.
+
+```
+<type>: <concise summary of change>
+
+## Why
+- Why this change was necessary
+
+## What
+- Key files changed and summary of modifications
+
+## Decisions
+- Alternative approaches considered and why they were rejected
+- Rationale for the chosen approach
+```
+
+- Omit any section that does not apply
+- For trivial changes (typo, fmt, etc.) a title-only message is fine
+- Only include Decisions when multiple approaches were considered"#.to_string());
 
     parts.join("\n\n")
 }
@@ -192,10 +213,11 @@ pub async fn run(request: ImplRequest, tx: mpsc::Sender<ImplEvent>) -> Result<()
     let result = run_inner(&request).await;
 
     match result {
-        Ok(_) => {
+        Ok(summary) => {
             let _ = tx
                 .send(ImplEvent::Completed {
                     issue_id: issue_id.clone(),
+                    summary,
                 })
                 .await;
         }
@@ -213,7 +235,7 @@ pub async fn run(request: ImplRequest, tx: mpsc::Sender<ImplEvent>) -> Result<()
     Ok(())
 }
 
-async fn run_inner(request: &ImplRequest) -> Result<()> {
+async fn run_inner(request: &ImplRequest) -> Result<String> {
     let (wt_path, _branch) = create_worktree(&request.repo_dir, &request.issue_id).await?;
 
     let prompt = build_prompt(request);
@@ -231,5 +253,6 @@ async fn run_inner(request: &ImplRequest) -> Result<()> {
         );
     }
 
-    Ok(())
+    let summary = String::from_utf8_lossy(&output.stdout).to_string();
+    Ok(summary)
 }

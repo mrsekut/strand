@@ -262,11 +262,20 @@ impl App {
             ImplEvent::Started { issue_id } => {
                 self.notify(format!("Implementing: {issue_id}..."));
             }
-            ImplEvent::Completed { issue_id } => {
+            ImplEvent::Completed { issue_id, summary } => {
                 if let Some(job) = self.impl_jobs.get_mut(&issue_id) {
                     job.status = ImplStatus::Done;
                 }
-                self.notify(format!("Implementation done: {issue_id}"));
+                let summary_len = summary.len();
+                let dir = self.repo_dir().to_string_lossy().to_string();
+                let id = issue_id.clone();
+                tokio::spawn(async move {
+                    let content = format!("## Implementation Log\n{summary}");
+                    if let Err(e) = bd::append_to_description(Some(&dir), &id, &content).await {
+                        eprintln!("Failed to append impl log to {id}: {e}");
+                    }
+                });
+                self.notify(format!("Implementation done: {issue_id} (log: {summary_len} bytes)"));
             }
             ImplEvent::Failed { issue_id, error } => {
                 if let Some(job) = self.impl_jobs.get_mut(&issue_id) {

@@ -57,8 +57,11 @@ pub async fn update_title(dir: Option<&str>, id: &str, title: &str) -> Result<()
 
 pub async fn get_issue(dir: Option<&str>, id: &str) -> Result<Issue> {
     let stdout = run_bd(dir, ["show", id, "--json"].as_slice()).await?;
-    let issue: Issue = serde_json::from_slice(&stdout)?;
-    Ok(issue)
+    let issues: Vec<Issue> = serde_json::from_slice(&stdout)?;
+    issues
+        .into_iter()
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("issue not found: {id}"))
 }
 
 pub async fn update_description(dir: Option<&str>, id: &str, description: &str) -> Result<()> {
@@ -75,6 +78,13 @@ pub async fn update_priority(dir: Option<&str>, id: &str, priority: u8) -> Resul
 pub async fn close_issue(dir: Option<&str>, id: &str) -> Result<()> {
     run_bd(dir, ["close", id].as_slice()).await?;
     Ok(())
+}
+
+pub async fn append_to_description(dir: Option<&str>, id: &str, content: &str) -> Result<()> {
+    let issue = get_issue(dir, id).await?;
+    let current = issue.description.unwrap_or_default();
+    let new_desc = format!("{current}\n\n{content}");
+    update_description(dir, id, &new_desc).await
 }
 
 pub async fn remove_label(dir: Option<&str>, id: &str, label: &str) -> Result<()> {
