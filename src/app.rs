@@ -190,16 +190,25 @@ impl App {
                 self.enriching_ids.remove(&issue_id);
                 self.notify(format!("Enriched: {issue_id}"));
                 let _ = self.load_issues().await;
-                // enrich完了後、p0-p1のみ自動でimplementを開始
-                if let Some(issue) = self.issues.iter().find(|i| i.id == issue_id).cloned() {
-                    if issue.priority.map_or(false, |p| p <= 1) {
-                        self.start_implement_issue(&issue);
-                    }
-                }
+                self.auto_implement_if_eligible(&issue_id);
             }
             EnrichEvent::Failed { issue_id, error } => {
                 self.enriching_ids.remove(&issue_id);
                 self.notify(format!("Enrich failed: {issue_id}: {error}"));
+            }
+        }
+    }
+
+    /// p0/p1かつenrich済みのissueに対して自動でimplementを開始する
+    fn auto_implement_if_eligible(&mut self, issue_id: &str) {
+        if self.impl_jobs.contains_key(issue_id) {
+            return;
+        }
+        if let Some(issue) = self.issues.iter().find(|i| i.id == issue_id).cloned() {
+            let is_high_priority = issue.priority.map_or(false, |p| p <= 1);
+            let is_enriched = issue.labels.contains(&"enriched".to_string());
+            if is_high_priority && is_enriched {
+                self.start_implement_issue(&issue);
             }
         }
     }
@@ -376,16 +385,15 @@ impl App {
                 self.notify(format!("Priority set: {issue_id} → P{priority}"));
                 let _ = self.load_issues().await;
 
-                // p0/p1に設定された場合、自動でenrich→implementを開始
+                // p0/p1に設定された場合、未enrichならenrich開始（完了時にauto-implが発火）
                 if priority <= 1 {
                     if let Some(issue) = self.issues.iter().find(|i| i.id == issue_id).cloned() {
-                        if self.impl_jobs.contains_key(&issue_id) {
-                            // already running
-                        } else if issue.labels.contains(&"enriched".to_string()) {
-                            self.start_implement_issue(&issue);
-                        } else {
-                            // enrich開始 → enrich完了時にauto-implが発火する
+                        if !issue.labels.contains(&"enriched".to_string())
+                            && !self.enriching_ids.contains(&issue_id)
+                        {
                             self.enrich_issue(issue);
+                        } else {
+                            self.auto_implement_if_eligible(&issue_id);
                         }
                     }
                 }
