@@ -259,12 +259,18 @@ fn draw_detail_keybar(frame: &mut Frame, app: &App, area: Rect) {
             .is_some_and(|j| matches!(j.status, ImplStatus::Done))
     });
 
+    let has_impl = issue.is_some_and(|i| app.impl_jobs.contains_key(&i.id));
+
     let mut keys: Vec<(&str, &str)> = vec![
         ("Esc", "back"),
         ("c", "copy id"),
         ("e", "edit"),
         ("x", "close"),
     ];
+
+    if has_impl {
+        keys.push(("p", "copy path"));
+    }
 
     if has_impl_done {
         keys.push(("m", "merge"));
