@@ -164,6 +164,7 @@ async fn handle_detail_key(
                     ConfirmAction::Merge => app.merge_impl().await,
                     ConfirmAction::Discard => app.discard_impl().await,
                 }
+                app.back_to_list();
             }
             return;
         }
