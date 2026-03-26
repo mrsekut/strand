@@ -4,7 +4,7 @@ use ratatui::{
 };
 
 use crate::app::App;
-use crate::bd::Issue;
+use crate::bd::{self, Issue};
 use crate::implement::ImplStatus;
 
 pub fn draw(frame: &mut Frame, app: &App) {
@@ -31,10 +31,6 @@ fn status_style(status: &str) -> Style {
         "deferred" => Style::default().fg(Color::Blue),
         _ => Style::default().fg(Color::DarkGray),
     }
-}
-
-fn short_id(id: &str) -> &str {
-    id.rsplit_once('-').map(|(_, s)| s).unwrap_or(id)
 }
 
 fn short_status(status: &str) -> &str {
@@ -68,7 +64,7 @@ fn issue_row<'a>(issue: &'a Issue, icon: &'a str, icon_style: Style) -> Row<'a> 
 
     Row::new(vec![
         Cell::from(icon).style(icon_style),
-        Cell::from(short_id(&issue.id).to_string()).style(Style::default().fg(Color::DarkGray)),
+        Cell::from(bd::short_id(&issue.id).to_string()).style(Style::default().fg(Color::DarkGray)),
         Cell::from(short_status(&issue.status).to_string()).style(status_style(&issue.status)),
         Cell::from(priority_text).style(priority_style(issue.priority)),
         Cell::from(issue.title.clone()),

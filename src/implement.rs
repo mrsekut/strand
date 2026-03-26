@@ -4,6 +4,8 @@ use anyhow::Result;
 use tokio::process::Command;
 use tokio::sync::mpsc;
 
+use crate::bd;
+
 #[derive(Debug, Clone)]
 pub enum ImplStatus {
     Running,
@@ -33,13 +35,9 @@ pub struct ImplRequest {
     pub repo_dir: PathBuf,
 }
 
-fn short_id(id: &str) -> &str {
-    id.rsplit_once('-').map(|(_, s)| s).unwrap_or(id)
-}
-
 pub fn worktree_path(repo_dir: &PathBuf, issue_id: &str) -> PathBuf {
     let parent = repo_dir.parent().unwrap_or(repo_dir);
-    parent.join(format!("strand-impl-{}", short_id(issue_id)))
+    parent.join(format!("strand-impl-{}", bd::short_id(issue_id)))
 }
 
 pub fn branch_name(issue_id: &str) -> String {
@@ -145,7 +143,7 @@ pub async fn discover_worktrees(repo_dir: &Path, issue_ids: &[String]) -> Vec<Im
         };
 
         // short_idからissue_idを逆引き
-        let issue_id = match issue_ids.iter().find(|id| short_id(id) == sid) {
+        let issue_id = match issue_ids.iter().find(|id| bd::short_id(id) == sid) {
             Some(id) => id.clone(),
             None => continue,
         };

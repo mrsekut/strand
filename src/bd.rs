@@ -16,6 +16,10 @@ pub struct Issue {
     pub labels: Vec<String>,
 }
 
+pub fn short_id(id: &str) -> &str {
+    id.rsplit_once('-').map(|(_, s)| s).unwrap_or(id)
+}
+
 fn bd_command(dir: Option<&str>) -> Command {
     let mut cmd = Command::new("bd");
     if let Some(d) = dir {
