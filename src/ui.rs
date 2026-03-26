@@ -231,12 +231,19 @@ fn keybar_line(keys: &[(&str, &str)]) -> Line<'static> {
 }
 
 fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
-    use crate::app::InputMode;
+    use crate::app::{ConfirmAction, InputMode};
 
     let keys: Vec<(&str, &str)> = match app.input_mode {
         InputMode::AwaitingAI => vec![("e", "enrich"), ("i", "implement"), ("Esc", "cancel")],
         InputMode::AwaitingPriority => vec![("0-4", "priority"), ("Esc", "cancel")],
-        InputMode::AwaitingCloseConfirm => vec![("y", "confirm close"), ("n", "cancel")],
+        InputMode::AwaitingConfirm(action) => {
+            let label = match action {
+                ConfirmAction::Close => "confirm close",
+                ConfirmAction::Merge => "confirm merge",
+                ConfirmAction::Discard => "confirm discard",
+            };
+            vec![("y", label), ("n", "cancel")]
+        }
         InputMode::Normal => vec![
             ("Enter", "detail"),
             ("c", "copy id"),
@@ -252,6 +259,20 @@ fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
 }
 
 fn draw_detail_keybar(frame: &mut Frame, app: &App, area: Rect) {
+    use crate::app::{ConfirmAction, InputMode};
+
+    if let InputMode::AwaitingConfirm(action) = app.input_mode {
+        let label = match action {
+            ConfirmAction::Close => "confirm close",
+            ConfirmAction::Merge => "confirm merge",
+            ConfirmAction::Discard => "confirm discard",
+        };
+        let keys: Vec<(&str, &str)> = vec![("y", label), ("n", "cancel")];
+        let line = keybar_line(&keys);
+        frame.render_widget(Paragraph::new(line), area);
+        return;
+    }
+
     let issue = app.selected_issue();
     let has_impl_done = issue.is_some_and(|i| {
         app.impl_jobs

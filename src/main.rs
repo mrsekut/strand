@@ -8,7 +8,7 @@ use std::io::stdout;
 use std::time::Duration;
 
 use anyhow::Result;
-use app::{App, InputMode};
+use app::{App, ConfirmAction, InputMode};
 use crossterm::{
     ExecutableCommand,
     event::{Event, EventStream, KeyCode},
@@ -106,11 +106,15 @@ async fn handle_list_key(key: KeyCode, app: &mut App) {
                 app.set_priority(c as u8 - b'0').await;
             }
         }
-        InputMode::AwaitingCloseConfirm => {
+        InputMode::AwaitingConfirm(action) => {
             app.input_mode = InputMode::Normal;
             app.notification = None;
             if let KeyCode::Char('y') = key {
-                app.close_issue().await;
+                match action {
+                    ConfirmAction::Close => app.close_issue().await,
+                    ConfirmAction::Merge => app.merge_impl().await,
+                    ConfirmAction::Discard => app.discard_impl().await,
+                }
             }
         }
         InputMode::Normal => match key {
@@ -123,7 +127,7 @@ async fn handle_list_key(key: KeyCode, app: &mut App) {
                 app.notification = Some(("a-...".into(), std::time::Instant::now()));
             }
             KeyCode::Char('x') => {
-                app.input_mode = InputMode::AwaitingCloseConfirm;
+                app.input_mode = InputMode::AwaitingConfirm(ConfirmAction::Close);
                 app.notification = Some(("Close? (y/n)".into(), std::time::Instant::now()));
             }
             KeyCode::Char('p') => {
@@ -140,11 +144,15 @@ async fn handle_detail_key(
     app: &mut App,
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
 ) {
-    if app.input_mode == InputMode::AwaitingCloseConfirm {
+    if let InputMode::AwaitingConfirm(action) = app.input_mode {
         app.input_mode = InputMode::Normal;
         app.notification = None;
         if let KeyCode::Char('y') = key {
-            app.close_issue().await;
+            match action {
+                ConfirmAction::Close => app.close_issue().await,
+                ConfirmAction::Merge => app.merge_impl().await,
+                ConfirmAction::Discard => app.discard_impl().await,
+            }
         }
         return;
     }
@@ -156,10 +164,16 @@ async fn handle_detail_key(
         KeyCode::Char('c') => app.copy_id(),
         KeyCode::Char('p') => app.copy_worktree_path(),
         KeyCode::Char('e') => app.edit_description(terminal).await,
-        KeyCode::Char('m') => app.merge_impl().await,
-        KeyCode::Char('d') => app.discard_impl().await,
+        KeyCode::Char('m') => {
+            app.input_mode = InputMode::AwaitingConfirm(ConfirmAction::Merge);
+            app.notification = Some(("Merge? (y/n)".into(), std::time::Instant::now()));
+        }
+        KeyCode::Char('d') => {
+            app.input_mode = InputMode::AwaitingConfirm(ConfirmAction::Discard);
+            app.notification = Some(("Discard? (y/n)".into(), std::time::Instant::now()));
+        }
         KeyCode::Char('x') => {
-            app.input_mode = InputMode::AwaitingCloseConfirm;
+            app.input_mode = InputMode::AwaitingConfirm(ConfirmAction::Close);
             app.notification = Some(("Close? (y/n)".into(), std::time::Instant::now()));
         }
         _ => {}

@@ -16,11 +16,18 @@ use crate::enrich::{self, EnrichEvent};
 use crate::implement::{self, ImplEvent, ImplJob, ImplStatus};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConfirmAction {
+    Close,
+    Merge,
+    Discard,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputMode {
     Normal,
     AwaitingAI,
     AwaitingPriority,
-    AwaitingCloseConfirm,
+    AwaitingConfirm(ConfirmAction),
 }
 
 pub struct App {
