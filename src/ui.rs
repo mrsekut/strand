@@ -19,7 +19,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
 
 fn format_timestamp(iso: &str) -> String {
     match iso.parse::<DateTime<FixedOffset>>() {
-        Ok(dt) => dt.format("%m/%d %H:%M").to_string(),
+        Ok(dt) => dt.format("%Y/%-m/%-d %H:%M").to_string(),
         Err(_) => iso.to_string(),
     }
 }
@@ -159,8 +159,16 @@ fn draw_detail(frame: &mut Frame, app: &App) {
             Span::raw("  "),
             Span::styled(priority, priority_style(issue.priority)),
         ]),
-        Line::from(""),
     ];
+
+    if let Some(dt) = issue.updated_at.as_deref() {
+        lines.push(Line::from(vec![
+            Span::styled("updated ", Style::default().fg(Color::DarkGray)),
+            Span::styled(format_timestamp(dt), Style::default().fg(Color::DarkGray)),
+        ]));
+    }
+
+    lines.push(Line::from(""));
 
     // Impl job info
     if let Some(job) = app.impl_jobs.get(&issue.id) {
@@ -209,15 +217,6 @@ fn draw_detail(frame: &mut Frame, app: &App) {
             impl_keys.push(("d", "discard"));
         }
         lines.push(keybar_line(&impl_keys));
-        lines.push(Line::from(""));
-    }
-
-    // Desc timestamp
-    if let Some(dt) = issue.updated_at.as_deref() {
-        lines.push(Line::from(vec![
-            Span::styled("Desc: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(format_timestamp(dt), Style::default().fg(Color::DarkGray)),
-        ]));
         lines.push(Line::from(""));
     }
 
