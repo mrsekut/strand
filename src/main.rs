@@ -173,8 +173,8 @@ async fn handle_detail_key(
 
     match key {
         KeyCode::Esc => app.back_to_list(),
-        KeyCode::Down => app.next(),
-        KeyCode::Up => app.previous(),
+        KeyCode::Down => app.scroll_offset = app.scroll_offset.saturating_add(1),
+        KeyCode::Up => app.scroll_offset = app.scroll_offset.saturating_sub(1),
         KeyCode::Char('c') => app.copy_id(),
         KeyCode::Char('p') => app.copy_worktree_path(),
         KeyCode::Char('e') => app.edit_description(terminal).await,

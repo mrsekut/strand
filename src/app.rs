@@ -44,6 +44,8 @@ pub struct App {
     pub notification: Option<(String, Instant)>,
     pub last_db_mtime: Option<SystemTime>,
     pub input_mode: InputMode,
+    pub detail_diff: Option<Vec<u8>>,
+    pub scroll_offset: u16,
 }
 
 impl App {
@@ -64,6 +66,8 @@ impl App {
             notification: None,
             last_db_mtime: None,
             input_mode: InputMode::Normal,
+            detail_diff: None,
+            scroll_offset: 0,
         }
     }
 
@@ -119,6 +123,8 @@ impl App {
 
     pub async fn open_detail(&mut self) {
         self.show_detail = true;
+        self.scroll_offset = 0;
+        self.load_detail_diff().await;
 
         if let Some(issue) = self.issues.get_mut(self.selected) {
             if issue.labels.contains(&"strand-unread".to_string()) {
@@ -132,8 +138,43 @@ impl App {
         }
     }
 
+    async fn load_detail_diff(&mut self) {
+        self.detail_diff = None;
+
+        let Some(issue) = self.selected_issue() else {
+            return;
+        };
+        let Some(job) = self.impl_jobs.get(&issue.id) else {
+            return;
+        };
+        if !matches!(job.status, ImplStatus::Done) {
+            return;
+        }
+
+        let branch = job.branch.clone();
+        let repo_dir = self.repo_dir();
+
+        let range = format!("master..{branch}");
+
+        let output = tokio::process::Command::new("sh")
+            .args(["-c", &format!(
+                "git diff --stat --color=always {range} && echo && git diff --color=always {range} | $(git config core.pager || echo cat)"
+            )])
+            .current_dir(&repo_dir)
+            .output()
+            .await;
+
+        if let Ok(out) = output {
+            if out.status.success() && !out.stdout.iter().all(|&b| b.is_ascii_whitespace()) {
+                self.detail_diff = Some(out.stdout);
+            }
+        }
+    }
+
     pub fn back_to_list(&mut self) {
         self.show_detail = false;
+        self.detail_diff = None;
+        self.scroll_offset = 0;
     }
 
     pub fn selected_issue(&self) -> Option<&Issue> {
@@ -293,7 +334,9 @@ impl App {
                         eprintln!("Failed to append impl log to {id}: {e}");
                     }
                 });
-                self.notify(format!("Implementation done: {issue_id} (log: {summary_len} bytes)"));
+                self.notify(format!(
+                    "Implementation done: {issue_id} (log: {summary_len} bytes)"
+                ));
             }
             ImplEvent::Failed { issue_id, error } => {
                 if let Some(job) = self.impl_jobs.get_mut(&issue_id) {

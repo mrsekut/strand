@@ -211,7 +211,21 @@ fn draw_detail(frame: &mut Frame, app: &App) {
     let md_text = tui_markdown::from_str(desc);
     lines.extend(md_text.lines);
 
-    let paragraph = Paragraph::new(lines).wrap(Wrap { trim: false });
+    if let Some(diff_bytes) = &app.detail_diff {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "── Changes ──",
+            Style::default().fg(Color::DarkGray),
+        )));
+        use ansi_to_tui::IntoText;
+        if let Ok(diff_text) = diff_bytes.into_text() {
+            lines.extend(diff_text.lines);
+        }
+    }
+
+    let paragraph = Paragraph::new(lines)
+        .wrap(Wrap { trim: false })
+        .scroll((app.scroll_offset, 0));
 
     frame.render_widget(paragraph, content_area);
 
