@@ -161,6 +161,44 @@ pub async fn merge_branch(repo_dir: &PathBuf, branch: &str) -> Result<()> {
     run_git(repo_dir, ["merge", branch].as_slice()).await
 }
 
+/// source_branchをtarget_branchにmergeする（一時worktreeを使用）
+pub async fn merge_into_branch(
+    repo_dir: &Path,
+    source_branch: &str,
+    target_branch: &str,
+) -> Result<()> {
+    // 一時worktreeでtarget_branchをcheckoutしてmerge
+    let tmp_dir = repo_dir
+        .parent()
+        .unwrap_or(repo_dir)
+        .join(format!("strand-merge-tmp-{}", std::process::id()));
+
+    // 一時worktree作成
+    let output = Command::new("git")
+        .args(["worktree", "add", &tmp_dir.to_string_lossy(), target_branch])
+        .current_dir(repo_dir)
+        .output()
+        .await?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "git worktree add (merge tmp) failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    // merge実行
+    let merge_result = run_git(&tmp_dir, &["merge", source_branch]).await;
+
+    // 一時worktree削除（merge成否に関わらず）
+    let _ = Command::new("git")
+        .args(["worktree", "remove", "--force", &tmp_dir.to_string_lossy()])
+        .current_dir(repo_dir)
+        .output()
+        .await;
+
+    merge_result
+}
+
 /// 既存のgit worktreeからImplJobを復元する
 pub async fn discover_worktrees(repo_dir: &Path, issue_ids: &[String]) -> Vec<ImplJob> {
     let output = match Command::new("git")

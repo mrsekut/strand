@@ -492,13 +492,20 @@ impl App {
     }
 
     pub async fn merge_impl(&mut self) {
-        let issue_id = match &self.view {
-            View::IssueDetail { issue_id, .. } => issue_id.clone(),
+        let (issue_id, epic_id) = match &self.view {
+            View::IssueDetail { issue_id, epic_id } => (issue_id.clone(), Some(epic_id.clone())),
+            View::EpicDetail { epic_id } => {
+                // epic詳細で選択中の子issueをmerge
+                let Some(child) = self.children.get(self.child_selected) else {
+                    return;
+                };
+                (child.id.clone(), Some(epic_id.clone()))
+            }
             _ => {
                 let Some(issue) = self.selected_issue() else {
                     return;
                 };
-                issue.id.clone()
+                (issue.id.clone(), None)
             }
         };
 
@@ -509,7 +516,15 @@ impl App {
 
         let repo_dir = self.repo_dir();
 
-        if let Err(e) = implement::merge_branch(&repo_dir, &job.branch).await {
+        // epicコンテキストならepicブランチへ、そうでなければカレントブランチへmerge
+        let merge_result = if let Some(eid) = &epic_id {
+            let target = implement::epic_branch_name(eid);
+            implement::merge_into_branch(&repo_dir, &job.branch, &target).await
+        } else {
+            implement::merge_branch(&repo_dir, &job.branch).await
+        };
+
+        if let Err(e) = merge_result {
             self.notify(format!("Merge failed: {e}"));
             return;
         }
