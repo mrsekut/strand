@@ -42,8 +42,8 @@ async fn run_bd(dir: Option<&str>, args: &[&str]) -> Result<Vec<u8>> {
     Ok(output.stdout)
 }
 
-/// bd未初期化ならエラーメッセージを表示して終了する
-pub fn check_init(dir: Option<&str>) -> Result<()> {
+/// .beadsが存在しなければ bd init と bd setup claude を自動実行する
+pub async fn check_init(dir: Option<&str>) -> Result<()> {
     let base = match dir {
         Some(d) => std::path::PathBuf::from(d),
         None => std::env::current_dir()?,
@@ -53,12 +53,34 @@ pub fn check_init(dir: Option<&str>) -> Result<()> {
         return Ok(());
     }
 
-    anyhow::bail!(
-        "Beads is not initialized in this repository.\n\
-         Please run the following commands first:\n\n\
-         \x20 bd init\n\
-         \x20 bd setup claude"
-    );
+    eprintln!("Beads not initialized — running `bd init` and `bd setup claude`...");
+
+    let init_output = Command::new("bd")
+        .arg("init")
+        .current_dir(&base)
+        .output()
+        .await?;
+    if !init_output.status.success() {
+        anyhow::bail!(
+            "bd init failed: {}",
+            String::from_utf8_lossy(&init_output.stderr)
+        );
+    }
+
+    let setup_output = Command::new("bd")
+        .args(["setup", "claude"])
+        .current_dir(&base)
+        .output()
+        .await?;
+    if !setup_output.status.success() {
+        anyhow::bail!(
+            "bd setup claude failed: {}",
+            String::from_utf8_lossy(&setup_output.stderr)
+        );
+    }
+
+    eprintln!("Beads initialized successfully.");
+    Ok(())
 }
 
 pub async fn list_issues(dir: Option<&str>) -> Result<Vec<Issue>> {

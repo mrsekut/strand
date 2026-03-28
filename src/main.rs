@@ -32,13 +32,13 @@ async fn main() -> Result<()> {
         let title = args
             .get(2)
             .ok_or_else(|| anyhow::anyhow!("Usage: strand q <title>"))?;
-        bd::check_init(dir.as_deref())?;
+        bd::check_init(dir.as_deref()).await?;
         let id = bd::quick_create(dir.as_deref(), title).await?;
         println!("{id}");
         return Ok(());
     }
 
-    bd::check_init(dir.as_deref())?;
+    bd::check_init(dir.as_deref()).await?;
 
     let mut app = App::new(dir);
     app.load_issues().await?;
