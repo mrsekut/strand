@@ -117,3 +117,13 @@ pub async fn add_label(dir: Option<&str>, id: &str, label: &str) -> Result<()> {
     run_bd(dir, ["label", "add", id, label].as_slice()).await?;
     Ok(())
 }
+
+/// Quick capture: epic, P2 で issue を作成し、ID を返す
+pub async fn quick_create(dir: Option<&str>, title: &str) -> Result<String> {
+    let stdout = run_bd(
+        dir,
+        ["q", title, "--type", "epic", "--priority", "2"].as_slice(),
+    )
+    .await?;
+    Ok(String::from_utf8_lossy(&stdout).trim().to_string())
+}

@@ -19,9 +19,24 @@ use ratatui::prelude::*;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let dir = std::env::args()
+    let args: Vec<String> = std::env::args().collect();
+
+    let dir = args
+        .iter()
         .position(|a| a == "--dir")
-        .and_then(|i| std::env::args().nth(i + 1));
+        .and_then(|i| args.get(i + 1))
+        .cloned();
+
+    // strand q "title" — quick capture (epic, P2)
+    if args.get(1).map(|s| s.as_str()) == Some("q") {
+        let title = args
+            .get(2)
+            .ok_or_else(|| anyhow::anyhow!("Usage: strand q <title>"))?;
+        bd::check_init(dir.as_deref())?;
+        let id = bd::quick_create(dir.as_deref(), title).await?;
+        println!("{id}");
+        return Ok(());
+    }
 
     bd::check_init(dir.as_deref())?;
 
