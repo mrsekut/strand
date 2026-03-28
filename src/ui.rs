@@ -409,6 +409,7 @@ fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
                 ConfirmAction::Close => "confirm close",
                 ConfirmAction::Merge => "confirm merge",
                 ConfirmAction::Discard => "confirm discard",
+                ConfirmAction::MergeEpic => "confirm merge epic to master",
             };
             vec![("y", label), ("n", "cancel")]
         }
@@ -436,18 +437,25 @@ fn draw_epic_detail_keybar(frame: &mut Frame, app: &App, area: Rect) {
                 ConfirmAction::Close => "confirm close",
                 ConfirmAction::Merge => "confirm merge",
                 ConfirmAction::Discard => "confirm discard",
+                ConfirmAction::MergeEpic => "confirm merge epic to master",
             };
             vec![("y", label), ("n", "cancel")]
         }
-        _ => vec![
-            ("Enter", "open issue"),
-            ("Esc", "back"),
-            ("c", "copy id"),
-            ("e", "edit"),
-            ("a", "ai"),
-            ("x", "close"),
-            ("q", "quit"),
-        ],
+        _ => {
+            let mut keys = vec![
+                ("Enter", "open issue"),
+                ("Esc", "back"),
+                ("c", "copy id"),
+                ("e", "edit"),
+                ("a", "ai"),
+                ("x", "close"),
+            ];
+            if app.all_children_closed() {
+                keys.push(("m", "merge to master"));
+            }
+            keys.push(("q", "quit"));
+            keys
+        }
     };
 
     let line = padded_keybar_line(&keys);
@@ -464,6 +472,7 @@ fn draw_issue_detail_keybar(frame: &mut Frame, app: &App, area: Rect) {
                 ConfirmAction::Close => "confirm close",
                 ConfirmAction::Merge => "confirm merge",
                 ConfirmAction::Discard => "confirm discard",
+                ConfirmAction::MergeEpic => "confirm merge epic to master",
             };
             vec![("y", label), ("n", "cancel")]
         }

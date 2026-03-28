@@ -313,6 +313,61 @@ async fn has_commits(repo_dir: &Path, branch: &str, base_branch: &str) -> bool {
     }
 }
 
+pub async fn epic_branch_exists(repo_dir: &Path, epic_id: &str) -> bool {
+    let branch = epic_branch_name(epic_id);
+    let output = Command::new("git")
+        .args(["rev-parse", "--verify", &branch])
+        .current_dir(repo_dir)
+        .output()
+        .await;
+
+    matches!(output, Ok(o) if o.status.success())
+}
+
+pub async fn merge_epic_to_master(repo_dir: &Path, epic_id: &str) -> Result<()> {
+    let branch = epic_branch_name(epic_id);
+
+    if !epic_branch_exists(repo_dir, epic_id).await {
+        anyhow::bail!("epic branch '{}' does not exist", branch);
+    }
+
+    // 一時worktreeでmasterにmerge
+    let wt_path = repo_dir
+        .parent()
+        .unwrap_or(repo_dir)
+        .join(format!("strand-merge-{}", bd::short_id(epic_id)));
+
+    let add_output = Command::new("git")
+        .args(["worktree", "add"])
+        .arg(&wt_path)
+        .arg("master")
+        .current_dir(repo_dir)
+        .output()
+        .await?;
+
+    if !add_output.status.success() {
+        anyhow::bail!(
+            "failed to create worktree for master: {}",
+            String::from_utf8_lossy(&add_output.stderr)
+        );
+    }
+
+    let merge_result = run_git(&wt_path, &["merge", &branch]).await;
+
+    let _ = run_git(
+        repo_dir,
+        &["worktree", "remove", "--force", &wt_path.to_string_lossy()],
+    )
+    .await;
+
+    merge_result?;
+
+    // merge成功後にepicブランチを削除
+    run_git(repo_dir, &["branch", "-D", &branch]).await?;
+
+    Ok(())
+}
+
 pub async fn run(request: ImplRequest, tx: mpsc::Sender<ImplEvent>) -> Result<()> {
     let issue_id = request.issue_id.clone();
 

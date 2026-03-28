@@ -133,6 +133,7 @@ async fn handle_epic_list_key(key: KeyCode, app: &mut App) {
                     ConfirmAction::Close => app.close_issue().await,
                     ConfirmAction::Merge => app.merge_impl().await,
                     ConfirmAction::Discard => app.discard_impl().await,
+                    ConfirmAction::MergeEpic => app.merge_epic().await,
                 }
             }
         }
@@ -182,6 +183,7 @@ async fn handle_epic_detail_key(
                     ConfirmAction::Close => app.close_issue().await,
                     ConfirmAction::Merge => app.merge_impl().await,
                     ConfirmAction::Discard => app.discard_impl().await,
+                    ConfirmAction::MergeEpic => app.merge_epic().await,
                 }
             }
             return;
@@ -199,6 +201,10 @@ async fn handle_epic_detail_key(
         KeyCode::Char('a') => {
             app.input_mode = InputMode::AwaitingAI;
             app.notification = Some(("a-...".into(), std::time::Instant::now()));
+        }
+        KeyCode::Char('m') if app.all_children_closed() => {
+            app.input_mode = InputMode::AwaitingConfirm(ConfirmAction::MergeEpic);
+            app.notification = Some(("Merge epic to master? (y/n)".into(), std::time::Instant::now()));
         }
         KeyCode::Char('x') => {
             app.input_mode = InputMode::AwaitingConfirm(ConfirmAction::Close);
@@ -240,6 +246,7 @@ async fn handle_issue_detail_key(
                         app.back();
                     }
                     ConfirmAction::Discard => app.discard_impl().await,
+                    ConfirmAction::MergeEpic => app.merge_epic().await,
                 }
             }
             return;

@@ -20,6 +20,7 @@ pub enum ConfirmAction {
     Close,
     Merge,
     Discard,
+    MergeEpic,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -793,5 +794,62 @@ impl App {
         }
 
         let _ = std::fs::remove_file(&tmp);
+    }
+
+    // --- Merge Epic ---
+
+    /// 全子issueがclosedならepicブランチをmasterにmerge＆epic close
+    pub async fn merge_epic(&mut self) {
+        let epic_id = match &self.view {
+            View::EpicDetail { epic_id } => epic_id.clone(),
+            _ => return,
+        };
+
+        // 全子issueがclosedか判定
+        let unclosed: Vec<String> = self
+            .children
+            .iter()
+            .filter(|c| c.status != "closed")
+            .map(|c| c.id.clone())
+            .collect();
+
+        if !unclosed.is_empty() {
+            self.notify(format!("Unclosed children: {}", unclosed.join(", ")));
+            return;
+        }
+
+        let repo_dir = self.repo_dir();
+
+        // epicブランチが存在しない場合はcloseのみ
+        if !implement::epic_branch_exists(&repo_dir, &epic_id).await {
+            let _ = bd::close_issue(self.dir.as_deref(), &epic_id).await;
+            self.notify(format!("No epic branch — closed: {epic_id}"));
+            self.view = View::EpicList;
+            let _ = self.load_issues().await;
+            if self.selected >= self.issues.len() && self.selected > 0 {
+                self.selected -= 1;
+            }
+            return;
+        }
+
+        // epicブランチをmasterにmerge
+        if let Err(e) = implement::merge_epic_to_master(&repo_dir, &epic_id).await {
+            self.notify(format!("Epic merge failed: {e}"));
+            return;
+        }
+
+        // epicをclose
+        let _ = bd::close_issue(self.dir.as_deref(), &epic_id).await;
+        self.notify(format!("Merged & closed epic: {epic_id}"));
+        self.view = View::EpicList;
+        let _ = self.load_issues().await;
+        if self.selected >= self.issues.len() && self.selected > 0 {
+            self.selected -= 1;
+        }
+    }
+
+    /// epic詳細でmerge可能か（全子issueがclosed + epicブランチ存在 or children非空）
+    pub fn all_children_closed(&self) -> bool {
+        !self.children.is_empty() && self.children.iter().all(|c| c.status == "closed")
     }
 }
