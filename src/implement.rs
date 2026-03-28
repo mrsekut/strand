@@ -45,6 +45,30 @@ pub fn branch_name(issue_id: &str) -> String {
     format!("impl/{issue_id}")
 }
 
+pub fn epic_branch_name(epic_id: &str) -> String {
+    format!("epic/{epic_id}")
+}
+
+/// epicブランチがなければmasterから作成する。既に存在すればスキップ。
+pub async fn ensure_epic_branch(repo_dir: &Path, epic_id: &str) -> Result<String> {
+    let branch = epic_branch_name(epic_id);
+
+    // ブランチが既に存在するか確認
+    let output = Command::new("git")
+        .args(["rev-parse", "--verify", &branch])
+        .current_dir(repo_dir)
+        .output()
+        .await?;
+
+    if output.status.success() {
+        return Ok(branch);
+    }
+
+    // masterから新規作成
+    run_git(repo_dir, &["branch", &branch, "master"]).await?;
+    Ok(branch)
+}
+
 fn build_prompt(request: &ImplRequest) -> String {
     let mut parts = vec![format!("Issue: {}", request.title)];
 
