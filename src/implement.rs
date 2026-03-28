@@ -239,8 +239,9 @@ pub async fn discover_worktrees(repo_dir: &Path, issue_ids: &[String]) -> Vec<Im
 
         let branch = branch_name(&issue_id);
 
-        // masterとの差分でstatus判定
-        let has = has_commits(repo_dir, &branch).await;
+        // issue_idから親epic_idを推定し、epicブランチがあればそれをbase_branchにする
+        let base_branch = guess_base_branch(repo_dir, &issue_id).await;
+        let has = has_commits(repo_dir, &branch, &base_branch).await;
         let status = match has {
             true => ImplStatus::Done,
             false => ImplStatus::Failed("interrupted".to_string()),
@@ -265,6 +266,28 @@ pub async fn discover_worktrees(repo_dir: &Path, issue_ids: &[String]) -> Vec<Im
     jobs
 }
 
+/// issue_idから親epic_idを推定し、epicブランチが存在すればその名前を返す。
+/// なければ"master"にフォールバック。
+/// 例: "strand-unq.1.1" → parent = "strand-unq.1" → epic/strand-unq.1
+async fn guess_base_branch(repo_dir: &Path, issue_id: &str) -> String {
+    // issue_idの最後の`.N`を除去して親IDを推定
+    if let Some(dot_pos) = issue_id.rfind('.') {
+        let parent_id = &issue_id[..dot_pos];
+        let epic_branch = epic_branch_name(parent_id);
+        let output = Command::new("git")
+            .args(["rev-parse", "--verify", &epic_branch])
+            .current_dir(repo_dir)
+            .output()
+            .await;
+        if let Ok(o) = output {
+            if o.status.success() {
+                return epic_branch;
+            }
+        }
+    }
+    "master".to_string()
+}
+
 /// ブランチの最新commit日時をISO 8601で取得
 async fn latest_commit_date(repo_dir: &Path, branch: &str) -> Option<String> {
     let output = Command::new("git")
@@ -277,9 +300,9 @@ async fn latest_commit_date(repo_dir: &Path, branch: &str) -> Option<String> {
     if date.is_empty() { None } else { Some(date) }
 }
 
-async fn has_commits(repo_dir: &Path, branch: &str) -> bool {
+async fn has_commits(repo_dir: &Path, branch: &str, base_branch: &str) -> bool {
     let output = Command::new("git")
-        .args(["log", &format!("master..{branch}"), "--oneline"])
+        .args(["log", &format!("{base_branch}..{branch}"), "--oneline"])
         .current_dir(repo_dir)
         .output()
         .await;

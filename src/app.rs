@@ -259,7 +259,12 @@ impl App {
         let branch = job.branch.clone();
         let repo_dir = self.repo_dir();
 
-        let range = format!("master..{branch}");
+        // epicコンテキストならepicブランチとの差分を表示
+        let base = match &self.view {
+            View::IssueDetail { epic_id, .. } => implement::epic_branch_name(epic_id),
+            _ => "master".to_string(),
+        };
+        let range = format!("{base}..{branch}");
 
         let output = tokio::process::Command::new("sh")
             .args(["-c", &format!(
