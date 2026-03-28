@@ -142,6 +142,34 @@ pub async fn add_label(dir: Option<&str>, id: &str, label: &str) -> Result<()> {
     Ok(())
 }
 
+/// 指定されたepicの子issueを取得する（closedを含む全件）
+pub async fn list_children(dir: Option<&str>, parent_id: &str) -> Result<Vec<Issue>> {
+    let stdout = run_bd(
+        dir,
+        [
+            "list", "--parent", parent_id, "--json", "--limit", "0", "--all",
+        ]
+        .as_slice(),
+    )
+    .await?;
+    let issues: Vec<Issue> = serde_json::from_slice(&stdout)?;
+    Ok(issues)
+}
+
+/// 指定されたepicの子issueのうちreadyなもののIDセットを返す
+pub async fn list_ready_ids(
+    dir: Option<&str>,
+    parent_id: &str,
+) -> Result<std::collections::HashSet<String>> {
+    let stdout = run_bd(
+        dir,
+        ["ready", "--parent", parent_id, "--json", "--limit", "0"].as_slice(),
+    )
+    .await?;
+    let issues: Vec<Issue> = serde_json::from_slice(&stdout)?;
+    Ok(issues.into_iter().map(|i| i.id).collect())
+}
+
 /// Quick capture: epic, P2 で issue を作成し、ID を返す
 pub async fn quick_create(dir: Option<&str>, title: &str) -> Result<String> {
     let stdout = run_bd(

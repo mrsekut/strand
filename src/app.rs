@@ -30,10 +30,17 @@ pub enum InputMode {
     AwaitingConfirm(ConfirmAction),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum View {
+    EpicList,
+    EpicDetail { epic_id: String },
+    IssueDetail { epic_id: String, issue_id: String },
+}
+
 pub struct App {
     pub issues: Vec<Issue>,
     pub selected: usize,
-    pub show_detail: bool,
+    pub view: View,
     pub dir: Option<String>,
     pub enrich_tx: mpsc::Sender<EnrichEvent>,
     pub enrich_rx: mpsc::Receiver<EnrichEvent>,
@@ -46,6 +53,10 @@ pub struct App {
     pub input_mode: InputMode,
     pub detail_diff: Option<Vec<u8>>,
     pub scroll_offset: u16,
+    // Epic detail state
+    pub children: Vec<Issue>,
+    pub ready_ids: HashSet<String>,
+    pub child_selected: usize,
 }
 
 impl App {
@@ -55,7 +66,7 @@ impl App {
         Self {
             issues: Vec::new(),
             selected: 0,
-            show_detail: false,
+            view: View::EpicList,
             dir,
             enrich_tx,
             enrich_rx,
@@ -68,10 +79,13 @@ impl App {
             input_mode: InputMode::Normal,
             detail_diff: None,
             scroll_offset: 0,
+            children: Vec::new(),
+            ready_ids: HashSet::new(),
+            child_selected: 0,
         }
     }
 
-    fn notify(&mut self, msg: impl Into<String>) {
+    pub fn notify(&mut self, msg: impl Into<String>) {
         self.notification = Some((msg.into(), Instant::now()));
     }
 
@@ -110,41 +124,132 @@ impl App {
     }
 
     pub fn next(&mut self) {
-        if !self.issues.is_empty() {
-            self.selected = (self.selected + 1).min(self.issues.len() - 1);
-        }
-    }
-
-    pub fn previous(&mut self) {
-        if !self.issues.is_empty() {
-            self.selected = self.selected.saturating_sub(1);
-        }
-    }
-
-    pub async fn open_detail(&mut self) {
-        self.show_detail = true;
-        self.scroll_offset = 0;
-        self.load_detail_diff().await;
-
-        if let Some(issue) = self.issues.get_mut(self.selected) {
-            if issue.labels.contains(&"strand-unread".to_string()) {
-                issue.labels.retain(|l| l != "strand-unread");
-                let id = issue.id.clone();
-                let dir = self.dir.clone();
-                tokio::spawn(async move {
-                    let _ = bd::remove_label(dir.as_deref(), &id, "strand-unread").await;
-                });
+        match &self.view {
+            View::EpicList => {
+                if !self.issues.is_empty() {
+                    self.selected = (self.selected + 1).min(self.issues.len() - 1);
+                }
+            }
+            View::EpicDetail { .. } => {
+                if !self.children.is_empty() {
+                    self.child_selected = (self.child_selected + 1).min(self.children.len() - 1);
+                }
+            }
+            View::IssueDetail { .. } => {
+                self.scroll_offset = self.scroll_offset.saturating_add(1);
             }
         }
     }
 
-    async fn load_detail_diff(&mut self) {
-        self.detail_diff = None;
+    pub fn previous(&mut self) {
+        match &self.view {
+            View::EpicList => {
+                if !self.issues.is_empty() {
+                    self.selected = self.selected.saturating_sub(1);
+                }
+            }
+            View::EpicDetail { .. } => {
+                self.child_selected = self.child_selected.saturating_sub(1);
+            }
+            View::IssueDetail { .. } => {
+                self.scroll_offset = self.scroll_offset.saturating_sub(1);
+            }
+        }
+    }
 
-        let Some(issue) = self.selected_issue() else {
+    // --- Navigation ---
+
+    pub async fn open_epic_detail(&mut self) {
+        let Some(epic) = self.selected_issue() else {
             return;
         };
-        let Some(job) = self.impl_jobs.get(&issue.id) else {
+        let epic_id = epic.id.clone();
+
+        // Clear unread label
+        if epic.labels.contains(&"strand-unread".to_string()) {
+            if let Some(epic) = self.issues.get_mut(self.selected) {
+                epic.labels.retain(|l| l != "strand-unread");
+            }
+            let id = epic_id.clone();
+            let dir = self.dir.clone();
+            tokio::spawn(async move {
+                let _ = bd::remove_label(dir.as_deref(), &id, "strand-unread").await;
+            });
+        }
+
+        self.view = View::EpicDetail {
+            epic_id: epic_id.clone(),
+        };
+        self.child_selected = 0;
+        self.scroll_offset = 0;
+        self.load_children(&epic_id).await;
+    }
+
+    pub async fn open_issue_detail(&mut self) {
+        let epic_id = match &self.view {
+            View::EpicDetail { epic_id } => epic_id.clone(),
+            _ => return,
+        };
+        let Some(issue) = self.children.get(self.child_selected) else {
+            return;
+        };
+        let issue_id = issue.id.clone();
+
+        self.view = View::IssueDetail {
+            epic_id,
+            issue_id: issue_id.clone(),
+        };
+        self.scroll_offset = 0;
+        self.load_issue_detail_diff(&issue_id).await;
+    }
+
+    pub fn back(&mut self) {
+        match &self.view {
+            View::EpicList => {}
+            View::EpicDetail { .. } => {
+                self.view = View::EpicList;
+                self.children.clear();
+                self.ready_ids.clear();
+                self.child_selected = 0;
+                self.scroll_offset = 0;
+            }
+            View::IssueDetail { epic_id, .. } => {
+                self.view = View::EpicDetail {
+                    epic_id: epic_id.clone(),
+                };
+                self.detail_diff = None;
+                self.scroll_offset = 0;
+            }
+        }
+    }
+
+    async fn load_children(&mut self, epic_id: &str) {
+        match bd::list_children(self.dir.as_deref(), epic_id).await {
+            Ok(children) => self.children = children,
+            Err(e) => {
+                self.notify(format!("Failed to load children: {e}"));
+                self.children = Vec::new();
+            }
+        }
+        match bd::list_ready_ids(self.dir.as_deref(), epic_id).await {
+            Ok(ids) => self.ready_ids = ids,
+            Err(_) => self.ready_ids = HashSet::new(),
+        }
+    }
+
+    pub async fn reload_children(&mut self) {
+        let epic_id = match &self.view {
+            View::EpicDetail { epic_id } => epic_id.clone(),
+            View::IssueDetail { epic_id, .. } => epic_id.clone(),
+            _ => return,
+        };
+        self.load_children(&epic_id).await;
+    }
+
+    async fn load_issue_detail_diff(&mut self, issue_id: &str) {
+        self.detail_diff = None;
+
+        let Some(job) = self.impl_jobs.get(issue_id) else {
             return;
         };
         if !matches!(job.status, ImplStatus::Done) {
@@ -171,23 +276,35 @@ impl App {
         }
     }
 
-    pub fn back_to_list(&mut self) {
-        self.show_detail = false;
-        self.detail_diff = None;
-        self.scroll_offset = 0;
-    }
-
     pub fn selected_issue(&self) -> Option<&Issue> {
         self.issues.get(self.selected)
+    }
+
+    pub fn selected_child(&self) -> Option<&Issue> {
+        self.children.get(self.child_selected)
+    }
+
+    /// 現在のview contextで対象となるissueを返す
+    /// IssueDetail → 子issue, EpicDetail → epic, EpicList → epic
+    pub fn current_issue(&self) -> Option<&Issue> {
+        match &self.view {
+            View::IssueDetail { issue_id, .. } => self.children.iter().find(|i| i.id == *issue_id),
+            View::EpicDetail { .. } => self.selected_issue(),
+            View::EpicList => self.selected_issue(),
+        }
     }
 
     // --- Enrich ---
 
     pub fn start_enrich(&mut self) {
-        let Some(issue) = self.selected_issue() else {
-            return;
+        let issue = match &self.view {
+            View::IssueDetail { issue_id, .. } => {
+                self.children.iter().find(|i| i.id == *issue_id).cloned()
+            }
+            _ => self.selected_issue().cloned(),
         };
-        self.enrich_issue(issue.clone());
+        let Some(issue) = issue else { return };
+        self.enrich_issue(issue);
     }
 
     fn enrich_issue(&mut self, issue: Issue) {
@@ -264,7 +381,7 @@ impl App {
 
     // --- Implement ---
 
-    fn repo_dir(&self) -> PathBuf {
+    pub fn repo_dir(&self) -> PathBuf {
         match &self.dir {
             Some(d) => PathBuf::from(d),
             None => std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
@@ -272,9 +389,13 @@ impl App {
     }
 
     pub fn start_implement(&mut self) {
-        let Some(issue) = self.selected_issue().cloned() else {
-            return;
+        let issue = match &self.view {
+            View::IssueDetail { issue_id, .. } => {
+                self.children.iter().find(|i| i.id == *issue_id).cloned()
+            }
+            _ => self.selected_issue().cloned(),
         };
+        let Some(issue) = issue else { return };
         self.start_implement_issue(&issue);
     }
 
@@ -349,10 +470,15 @@ impl App {
     }
 
     pub async fn merge_impl(&mut self) {
-        let Some(issue) = self.selected_issue() else {
-            return;
+        let issue_id = match &self.view {
+            View::IssueDetail { issue_id, .. } => issue_id.clone(),
+            _ => {
+                let Some(issue) = self.selected_issue() else {
+                    return;
+                };
+                issue.id.clone()
+            }
         };
-        let issue_id = issue.id.clone();
 
         let job = match self.impl_jobs.get(&issue_id) {
             Some(job) if matches!(job.status, ImplStatus::Done) => job.clone(),
@@ -377,13 +503,19 @@ impl App {
         self.impl_jobs.remove(&issue_id);
         self.notify(format!("Merged & closed: {issue_id}"));
         let _ = self.load_issues().await;
+        self.reload_children().await;
     }
 
     pub async fn discard_impl(&mut self) {
-        let Some(issue) = self.selected_issue() else {
-            return;
+        let issue_id = match &self.view {
+            View::IssueDetail { issue_id, .. } => issue_id.clone(),
+            _ => {
+                let Some(issue) = self.selected_issue() else {
+                    return;
+                };
+                issue.id.clone()
+            }
         };
-        let issue_id = issue.id.clone();
 
         let job = match self.impl_jobs.get(&issue_id) {
             Some(job) => job.clone(),
@@ -406,15 +538,21 @@ impl App {
     // --- Close Issue ---
 
     pub async fn close_issue(&mut self) {
-        let Some(issue) = self.selected_issue() else {
-            return;
+        let issue_id = match &self.view {
+            View::IssueDetail { issue_id, .. } => issue_id.clone(),
+            _ => {
+                let Some(issue) = self.selected_issue() else {
+                    return;
+                };
+                issue.id.clone()
+            }
         };
-        let issue_id = issue.id.clone();
 
         match bd::close_issue(self.dir.as_deref(), &issue_id).await {
             Ok(_) => {
                 self.notify(format!("Closed: {issue_id}"));
                 let _ = self.load_issues().await;
+                self.reload_children().await;
                 if self.selected >= self.issues.len() && self.selected > 0 {
                     self.selected -= 1;
                 }
@@ -457,60 +595,52 @@ impl App {
         }
     }
 
-    // --- Copy ID ---
+    // --- Copy ---
 
     pub fn copy_id(&mut self) {
-        let Some(issue) = self.selected_issue() else {
-            return;
+        let id = match &self.view {
+            View::IssueDetail { issue_id, .. } => issue_id.clone(),
+            _ => {
+                let Some(issue) = self.selected_issue() else {
+                    return;
+                };
+                issue.id.clone()
+            }
         };
-        let id = issue.id.clone();
-
-        let result = std::process::Command::new("pbcopy")
-            .stdin(std::process::Stdio::piped())
-            .spawn()
-            .and_then(|mut child| {
-                use std::io::Write;
-                child.stdin.as_mut().unwrap().write_all(id.as_bytes())?;
-                child.wait()
-            });
-
-        match result {
-            Ok(_) => {
-                self.notify(format!("Copied: {id}"));
-            }
-            Err(e) => {
-                self.notify(format!("Copy failed: {e}"));
-            }
-        }
+        self.copy_to_clipboard(&id);
     }
 
     pub fn copy_worktree_path(&mut self) {
-        let Some(issue) = self.selected_issue() else {
-            return;
+        let issue_id = match &self.view {
+            View::IssueDetail { issue_id, .. } => issue_id.clone(),
+            _ => {
+                let Some(issue) = self.selected_issue() else {
+                    return;
+                };
+                issue.id.clone()
+            }
         };
-        let job = self.impl_jobs.get(&issue.id);
-        let Some(job) = job else {
+        let Some(job) = self.impl_jobs.get(&issue_id) else {
             self.notify("No impl job found");
             return;
         };
         let path = job.worktree_path.display().to_string();
+        self.copy_to_clipboard(&path);
+    }
 
+    fn copy_to_clipboard(&mut self, text: &str) {
         let result = std::process::Command::new("pbcopy")
             .stdin(std::process::Stdio::piped())
             .spawn()
             .and_then(|mut child| {
                 use std::io::Write;
-                child.stdin.as_mut().unwrap().write_all(path.as_bytes())?;
+                child.stdin.as_mut().unwrap().write_all(text.as_bytes())?;
                 child.wait()
             });
 
         match result {
-            Ok(_) => {
-                self.notify(format!("Copied: {path}"));
-            }
-            Err(e) => {
-                self.notify(format!("Copy failed: {e}"));
-            }
+            Ok(_) => self.notify(format!("Copied: {text}")),
+            Err(e) => self.notify(format!("Copy failed: {e}")),
         }
     }
 
@@ -520,12 +650,36 @@ impl App {
         &mut self,
         terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
     ) {
-        let Some(issue) = self.selected_issue() else {
-            return;
+        let (issue_id, current_title, current_desc) = match &self.view {
+            View::IssueDetail { issue_id, .. } => {
+                let issue = self.children.iter().find(|i| i.id == *issue_id);
+                let Some(issue) = issue else { return };
+                (
+                    issue.id.clone(),
+                    issue.title.clone(),
+                    issue.description.clone().unwrap_or_default(),
+                )
+            }
+            View::EpicDetail { epic_id } => {
+                let issue = self.issues.iter().find(|i| i.id == *epic_id);
+                let Some(issue) = issue else { return };
+                (
+                    issue.id.clone(),
+                    issue.title.clone(),
+                    issue.description.clone().unwrap_or_default(),
+                )
+            }
+            _ => {
+                let Some(issue) = self.selected_issue() else {
+                    return;
+                };
+                (
+                    issue.id.clone(),
+                    issue.title.clone(),
+                    issue.description.clone().unwrap_or_default(),
+                )
+            }
         };
-        let issue_id = issue.id.clone();
-        let current_title = issue.title.clone();
-        let current_desc = issue.description.clone().unwrap_or_default();
 
         // 一時ファイルに書き出し（1行目: title, 2行目: 空行, 3行目以降: description）
         let content = format!("{}\n\n{}", current_title, current_desc);
@@ -535,7 +689,7 @@ impl App {
             return;
         }
 
-        // TUIを一時離脱してエディタ起動
+        // TUIを一時��脱してエディタ起動
         let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".into());
         disable_raw_mode().ok();
         stdout().execute(LeaveAlternateScreen).ok();
@@ -551,7 +705,7 @@ impl App {
         match status {
             Ok(s) if s.success() => {
                 if let Ok(new_content) = std::fs::read_to_string(&tmp) {
-                    // 1行目: title, 2行目: 空行, 3行目以降: description
+                    // 1行目: title, 2行目: 空行, 3��目以降: description
                     let new_title = new_content.lines().next().unwrap_or("").trim().to_string();
                     let new_desc = new_content
                         .lines()
@@ -586,6 +740,7 @@ impl App {
                         if ok {
                             self.notify(format!("Updated: {issue_id}"));
                             let _ = self.load_issues().await;
+                            self.reload_children().await;
                         }
                     }
                 }

@@ -8,7 +8,7 @@ use std::io::stdout;
 use std::time::Duration;
 
 use anyhow::Result;
-use app::{App, ConfirmAction, InputMode};
+use app::{App, ConfirmAction, InputMode, View};
 use crossterm::{
     ExecutableCommand,
     event::{Event, EventStream, KeyCode},
@@ -72,16 +72,16 @@ async fn run(
             maybe_event = event_stream.next() => {
                 match maybe_event {
                     Some(Ok(Event::Key(key))) => {
-                        if key.code == KeyCode::Char('q') {
+                        if key.code == KeyCode::Char('q') && app.input_mode == InputMode::Normal {
                             break;
                         }
-                        if app.show_detail {
-                            handle_detail_key(key.code, app, terminal).await;
-                        } else {
-                            handle_list_key(key.code, app).await;
+                        match &app.view {
+                            View::EpicList => handle_epic_list_key(key.code, app).await,
+                            View::EpicDetail { .. } => handle_epic_detail_key(key.code, app, terminal).await,
+                            View::IssueDetail { .. } => handle_issue_detail_key(key.code, app, terminal).await,
                         }
                     }
-                    Some(Ok(_)) => {} // リサイズ等のイベントは無視
+                    Some(Ok(_)) => {}
                     Some(Err(_)) => break,
                     None => break,
                 }
@@ -96,6 +96,8 @@ async fn run(
                 if app.has_db_changed() {
                     let _ = app.load_issues().await;
                     app.auto_enrich();
+                    // Also reload children if we're in epic detail
+                    app.reload_children().await;
                 }
             }
         }
@@ -103,7 +105,9 @@ async fn run(
     Ok(())
 }
 
-async fn handle_list_key(key: KeyCode, app: &mut App) {
+// --- Epic List ---
+
+async fn handle_epic_list_key(key: KeyCode, app: &mut App) {
     match app.input_mode {
         InputMode::AwaitingAI => {
             app.input_mode = InputMode::Normal;
@@ -133,9 +137,9 @@ async fn handle_list_key(key: KeyCode, app: &mut App) {
             }
         }
         InputMode::Normal => match key {
-            KeyCode::Down => app.next(),
-            KeyCode::Up => app.previous(),
-            KeyCode::Enter => app.open_detail().await,
+            KeyCode::Down | KeyCode::Char('j') => app.next(),
+            KeyCode::Up | KeyCode::Char('k') => app.previous(),
+            KeyCode::Enter => app.open_epic_detail().await,
             KeyCode::Char('c') => app.copy_id(),
             KeyCode::Char('a') => {
                 app.input_mode = InputMode::AwaitingAI;
@@ -154,7 +158,59 @@ async fn handle_list_key(key: KeyCode, app: &mut App) {
     }
 }
 
-async fn handle_detail_key(
+// --- Epic Detail ---
+
+async fn handle_epic_detail_key(
+    key: KeyCode,
+    app: &mut App,
+    terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+) {
+    match app.input_mode {
+        InputMode::AwaitingAI => {
+            app.input_mode = InputMode::Normal;
+            app.notification = None;
+            if let KeyCode::Char('e') = key {
+                app.start_enrich();
+            }
+            return;
+        }
+        InputMode::AwaitingConfirm(action) => {
+            app.input_mode = InputMode::Normal;
+            app.notification = None;
+            if let KeyCode::Char('y') = key {
+                match action {
+                    ConfirmAction::Close => app.close_issue().await,
+                    ConfirmAction::Merge => app.merge_impl().await,
+                    ConfirmAction::Discard => app.discard_impl().await,
+                }
+            }
+            return;
+        }
+        _ => {}
+    }
+
+    match key {
+        KeyCode::Esc => app.back(),
+        KeyCode::Down | KeyCode::Char('j') => app.next(),
+        KeyCode::Up | KeyCode::Char('k') => app.previous(),
+        KeyCode::Enter => app.open_issue_detail().await,
+        KeyCode::Char('c') => app.copy_id(),
+        KeyCode::Char('e') => app.edit_description(terminal).await,
+        KeyCode::Char('a') => {
+            app.input_mode = InputMode::AwaitingAI;
+            app.notification = Some(("a-...".into(), std::time::Instant::now()));
+        }
+        KeyCode::Char('x') => {
+            app.input_mode = InputMode::AwaitingConfirm(ConfirmAction::Close);
+            app.notification = Some(("Close? (y/n)".into(), std::time::Instant::now()));
+        }
+        _ => {}
+    }
+}
+
+// --- Issue Detail ---
+
+async fn handle_issue_detail_key(
     key: KeyCode,
     app: &mut App,
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
@@ -175,11 +231,16 @@ async fn handle_detail_key(
             app.notification = None;
             if let KeyCode::Char('y') = key {
                 match action {
-                    ConfirmAction::Close => app.close_issue().await,
-                    ConfirmAction::Merge => app.merge_impl().await,
+                    ConfirmAction::Close => {
+                        app.close_issue().await;
+                        app.back();
+                    }
+                    ConfirmAction::Merge => {
+                        app.merge_impl().await;
+                        app.back();
+                    }
                     ConfirmAction::Discard => app.discard_impl().await,
                 }
-                app.back_to_list();
             }
             return;
         }
@@ -187,9 +248,9 @@ async fn handle_detail_key(
     }
 
     match key {
-        KeyCode::Esc => app.back_to_list(),
-        KeyCode::Down => app.scroll_offset = app.scroll_offset.saturating_add(1),
-        KeyCode::Up => app.scroll_offset = app.scroll_offset.saturating_sub(1),
+        KeyCode::Esc => app.back(),
+        KeyCode::Down => app.next(),
+        KeyCode::Up => app.previous(),
         KeyCode::Char('c') => app.copy_id(),
         KeyCode::Char('p') => app.copy_worktree_path(),
         KeyCode::Char('e') => app.edit_description(terminal).await,

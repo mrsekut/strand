@@ -5,15 +5,15 @@ use ratatui::{
 
 use chrono::{DateTime, FixedOffset};
 
-use crate::app::App;
+use crate::app::{App, View};
 use crate::bd::{self, Issue};
 use crate::implement::ImplStatus;
 
 pub fn draw(frame: &mut Frame, app: &App) {
-    if app.show_detail {
-        draw_detail(frame, app);
-    } else {
-        draw_list(frame, app);
+    match &app.view {
+        View::EpicList => draw_epic_list(frame, app),
+        View::EpicDetail { .. } => draw_epic_detail(frame, app),
+        View::IssueDetail { .. } => draw_issue_detail(frame, app),
     }
 }
 
@@ -39,11 +39,12 @@ fn status_style(status: &str) -> Style {
         "open" => Style::default().fg(Color::Green),
         "in_progress" => Style::default().fg(Color::Cyan),
         "deferred" => Style::default().fg(Color::Blue),
+        "closed" => Style::default().fg(Color::DarkGray),
         _ => Style::default().fg(Color::DarkGray),
     }
 }
 
-fn issue_icon(app: &App, issue: &Issue) -> (&'static str, Style) {
+fn epic_icon(app: &App, issue: &Issue) -> (&'static str, Style) {
     if let Some(job) = app.impl_jobs.get(&issue.id) {
         return match &job.status {
             ImplStatus::Running => ("⚡", Style::default().fg(Color::Magenta)),
@@ -60,18 +61,26 @@ fn issue_icon(app: &App, issue: &Issue) -> (&'static str, Style) {
     (" ", Style::default())
 }
 
-fn issue_row<'a>(issue: &'a Issue, icon: &'a str, icon_style: Style) -> Row<'a> {
-    let priority_text = issue.priority.map(|p| format!("P{p}")).unwrap_or_default();
-
-    Row::new(vec![
-        Cell::from(icon).style(icon_style),
-        Cell::from(bd::short_id(&issue.id).to_string()).style(Style::default().fg(Color::DarkGray)),
-        Cell::from(priority_text).style(priority_style(issue.priority)),
-        Cell::from(issue.title.clone()),
-    ])
+fn child_icon(app: &App, issue: &Issue) -> (&'static str, Style) {
+    if let Some(job) = app.impl_jobs.get(&issue.id) {
+        return match &job.status {
+            ImplStatus::Running => ("⚡", Style::default().fg(Color::Magenta)),
+            ImplStatus::Done => ("✓", Style::default().fg(Color::Green)),
+            ImplStatus::Failed(_) => ("✗", Style::default().fg(Color::Red)),
+        };
+    }
+    if issue.status == "closed" {
+        return ("✓", Style::default().fg(Color::DarkGray));
+    }
+    if app.ready_ids.contains(&issue.id) {
+        return ("○", Style::default().fg(Color::Green));
+    }
+    ("·", Style::default().fg(Color::DarkGray))
 }
 
-fn draw_list(frame: &mut Frame, app: &App) {
+// --- Epic List ---
+
+fn draw_epic_list(frame: &mut Frame, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -85,8 +94,15 @@ fn draw_list(frame: &mut Frame, app: &App) {
         .issues
         .iter()
         .map(|issue| {
-            let (icon, icon_style) = issue_icon(app, issue);
-            issue_row(issue, icon, icon_style)
+            let (icon, icon_style) = epic_icon(app, issue);
+            let priority_text = issue.priority.map(|p| format!("P{p}")).unwrap_or_default();
+            Row::new(vec![
+                Cell::from(icon).style(icon_style),
+                Cell::from(bd::short_id(&issue.id).to_string())
+                    .style(Style::default().fg(Color::DarkGray)),
+                Cell::from(priority_text).style(priority_style(issue.priority)),
+                Cell::from(issue.title.clone()),
+            ])
         })
         .collect();
 
@@ -110,9 +126,132 @@ fn draw_list(frame: &mut Frame, app: &App) {
     draw_notification(frame, app, chunks[2]);
 }
 
-fn draw_detail(frame: &mut Frame, app: &App) {
-    let Some(issue) = app.selected_issue() else {
-        return;
+// --- Epic Detail ---
+
+fn draw_epic_detail(frame: &mut Frame, app: &App) {
+    let epic_id = match &app.view {
+        View::EpicDetail { epic_id } => epic_id,
+        _ => return,
+    };
+    let epic = match app.issues.iter().find(|i| i.id == *epic_id) {
+        Some(e) => e,
+        None => return,
+    };
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+        ])
+        .split(frame.area());
+
+    // Split content area: description (top) + child issue table (bottom)
+    let content_area = chunks[0].inner(Margin {
+        horizontal: 2,
+        vertical: 1,
+    });
+
+    // Calculate layout: description gets scroll, children get fixed rows
+    let children_height = (app.children.len() as u16 + 2).min(content_area.height / 2); // +2 for header spacing
+    let content_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(3),                  // description
+            Constraint::Length(children_height), // children table
+        ])
+        .split(content_area);
+
+    // Description section
+    let priority = epic
+        .priority
+        .map(|p| format!("P{p}"))
+        .unwrap_or_else(|| "N/A".into());
+
+    let mut lines = vec![
+        Line::from(vec![Span::styled(
+            &epic.title,
+            Style::default().add_modifier(Modifier::BOLD),
+        )]),
+        Line::from(vec![
+            Span::styled(&epic.id, Style::default().fg(Color::DarkGray)),
+            Span::raw("  "),
+            Span::styled(&epic.status, status_style(&epic.status)),
+            Span::raw("  "),
+            Span::styled(priority, priority_style(epic.priority)),
+        ]),
+    ];
+
+    if let Some(dt) = epic.updated_at.as_deref() {
+        lines.push(Line::from(vec![
+            Span::styled("updated ", Style::default().fg(Color::DarkGray)),
+            Span::styled(format_timestamp(dt), Style::default().fg(Color::DarkGray)),
+        ]));
+    }
+
+    lines.push(Line::from(""));
+
+    let desc = epic.description.as_deref().unwrap_or("(no description)");
+    let md_text = tui_markdown::from_str(desc);
+    lines.extend(md_text.lines);
+
+    let paragraph = Paragraph::new(lines)
+        .wrap(Wrap { trim: false })
+        .scroll((app.scroll_offset, 0));
+    frame.render_widget(paragraph, content_chunks[0]);
+
+    // Children section
+    if !app.children.is_empty() {
+        let rows: Vec<Row> = app
+            .children
+            .iter()
+            .map(|issue| {
+                let (icon, icon_style) = child_icon(app, issue);
+                let priority_text = issue.priority.map(|p| format!("P{p}")).unwrap_or_default();
+                Row::new(vec![
+                    Cell::from(icon).style(icon_style),
+                    Cell::from(bd::short_id(&issue.id).to_string())
+                        .style(Style::default().fg(Color::DarkGray)),
+                    Cell::from(priority_text).style(priority_style(issue.priority)),
+                    Cell::from(Span::styled(&issue.status, status_style(&issue.status))),
+                    Cell::from(issue.title.clone()),
+                ])
+            })
+            .collect();
+
+        let widths = [
+            Constraint::Length(2),
+            Constraint::Length(8),
+            Constraint::Length(3),
+            Constraint::Length(12),
+            Constraint::Min(10),
+        ];
+
+        let table = Table::new(rows, widths)
+            .row_highlight_style(Style::default().bg(Color::Rgb(70, 70, 90)))
+            .highlight_symbol("▶ ");
+
+        let mut state = TableState::default();
+        state.select(Some(app.child_selected));
+
+        frame.render_stateful_widget(table, content_chunks[1], &mut state);
+    }
+
+    draw_epic_detail_keybar(frame, app, chunks[1]);
+    draw_notification(frame, app, chunks[2]);
+}
+
+// --- Issue Detail ---
+
+fn draw_issue_detail(frame: &mut Frame, app: &App) {
+    let issue_id = match &app.view {
+        View::IssueDetail { issue_id, .. } => issue_id,
+        _ => return,
+    };
+    let issue = match app.children.iter().find(|i| i.id == *issue_id) {
+        Some(i) => i,
+        None => return,
     };
 
     let chunks = Layout::default()
@@ -229,9 +368,11 @@ fn draw_detail(frame: &mut Frame, app: &App) {
 
     frame.render_widget(paragraph, content_area);
 
-    draw_detail_keybar(frame, app, chunks[1]);
+    draw_issue_detail_keybar(frame, app, chunks[1]);
     draw_notification(frame, app, chunks[2]);
 }
+
+// --- Key bars ---
 
 fn padded_keybar_line(keys: &[(&str, &str)]) -> Line<'static> {
     let mut line = keybar_line(keys);
@@ -285,7 +426,35 @@ fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(Paragraph::new(line), area);
 }
 
-fn draw_detail_keybar(frame: &mut Frame, app: &App, area: Rect) {
+fn draw_epic_detail_keybar(frame: &mut Frame, app: &App, area: Rect) {
+    use crate::app::{ConfirmAction, InputMode};
+
+    let keys: Vec<(&str, &str)> = match app.input_mode {
+        InputMode::AwaitingAI => vec![("e", "enrich"), ("Esc", "cancel")],
+        InputMode::AwaitingConfirm(action) => {
+            let label = match action {
+                ConfirmAction::Close => "confirm close",
+                ConfirmAction::Merge => "confirm merge",
+                ConfirmAction::Discard => "confirm discard",
+            };
+            vec![("y", label), ("n", "cancel")]
+        }
+        _ => vec![
+            ("Enter", "open issue"),
+            ("Esc", "back"),
+            ("c", "copy id"),
+            ("e", "edit"),
+            ("a", "ai"),
+            ("x", "close"),
+            ("q", "quit"),
+        ],
+    };
+
+    let line = padded_keybar_line(&keys);
+    frame.render_widget(Paragraph::new(line), area);
+}
+
+fn draw_issue_detail_keybar(frame: &mut Frame, app: &App, area: Rect) {
     use crate::app::{ConfirmAction, InputMode};
 
     let keys: Vec<(&str, &str)> = match app.input_mode {
@@ -301,6 +470,7 @@ fn draw_detail_keybar(frame: &mut Frame, app: &App, area: Rect) {
         _ => vec![
             ("Esc", "back"),
             ("c", "copy id"),
+            ("p", "copy path"),
             ("e", "edit"),
             ("a", "ai"),
             ("x", "close"),
