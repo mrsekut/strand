@@ -212,13 +212,14 @@ impl App {
         });
     }
 
-    /// enrichedラベルがない未enrich issueを自動的にenrichする
+    /// epicタイプかつenrichedラベルがない未enrich issueを自動的にenrichする
     pub fn auto_enrich(&mut self) {
         let unenriched: Vec<Issue> = self
             .issues
             .iter()
             .filter(|issue| {
-                !issue.labels.contains(&"strand-enriched".to_string())
+                issue.issue_type.as_deref() == Some("epic")
+                    && !issue.labels.contains(&"strand-enriched".to_string())
                     && !self.enriching_ids.contains(&issue.id)
             })
             .cloned()

@@ -15,6 +15,8 @@ pub struct Issue {
     #[serde(default)]
     pub labels: Vec<String>,
     #[serde(default)]
+    pub issue_type: Option<String>,
+    #[serde(default)]
     pub updated_at: Option<String>,
 }
 
