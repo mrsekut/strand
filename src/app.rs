@@ -356,7 +356,7 @@ impl App {
                 self.enriching_ids.remove(&issue_id);
                 self.notify(format!("Enriched: {issue_id}"));
                 let _ = self.load_issues().await;
-                self.auto_implement_if_eligible(&issue_id);
+                self.auto_implement_if_eligible(&issue_id).await;
             }
             EnrichEvent::Failed { issue_id, error } => {
                 self.enriching_ids.remove(&issue_id);
@@ -366,7 +366,7 @@ impl App {
     }
 
     /// p0/p1かつenrich済みのissueに対して自動でimplementを開始する
-    fn auto_implement_if_eligible(&mut self, issue_id: &str) {
+    async fn auto_implement_if_eligible(&mut self, issue_id: &str) {
         if self.impl_jobs.contains_key(issue_id) {
             return;
         }
@@ -374,7 +374,8 @@ impl App {
             let is_high_priority = issue.priority.map_or(false, |p| p <= 1);
             let is_enriched = issue.labels.contains(&"strand-enriched".to_string());
             if is_high_priority && is_enriched {
-                self.start_implement_issue(&issue);
+                // auto-implはepicコンテキスト外なのでbase_branch=None(master)
+                self.start_implement_issue(&issue, None).await;
             }
         }
     }
@@ -388,18 +389,24 @@ impl App {
         }
     }
 
-    pub fn start_implement(&mut self) {
-        let issue = match &self.view {
-            View::IssueDetail { issue_id, .. } => {
-                self.children.iter().find(|i| i.id == *issue_id).cloned()
+    pub async fn start_implement(&mut self) {
+        let (issue, epic_id) = match &self.view {
+            View::IssueDetail { issue_id, epic_id } => {
+                let issue = self.children.iter().find(|i| i.id == *issue_id).cloned();
+                (issue, Some(epic_id.clone()))
             }
-            _ => self.selected_issue().cloned(),
+            View::EpicDetail { epic_id } => {
+                // epic詳細で選択中の子issueに対してimpl
+                let issue = self.children.get(self.child_selected).cloned();
+                (issue, Some(epic_id.clone()))
+            }
+            _ => (self.selected_issue().cloned(), None),
         };
         let Some(issue) = issue else { return };
-        self.start_implement_issue(&issue);
+        self.start_implement_issue(&issue, epic_id.as_deref()).await;
     }
 
-    fn start_implement_issue(&mut self, issue: &Issue) {
+    async fn start_implement_issue(&mut self, issue: &Issue, epic_id: Option<&str>) {
         let issue_id = issue.id.clone();
         let title = issue.title.clone();
         let description = issue.description.clone();
@@ -409,6 +416,20 @@ impl App {
         }
 
         let repo_dir = self.repo_dir();
+
+        // epicブランチを確保（epic_idがある場合）
+        let base_branch = if let Some(eid) = epic_id {
+            match implement::ensure_epic_branch(&repo_dir, eid).await {
+                Ok(branch) => branch,
+                Err(e) => {
+                    self.notify(format!("Failed to create epic branch: {e}"));
+                    return;
+                }
+            }
+        } else {
+            "master".to_string()
+        };
+
         let wt_path = implement::worktree_path(&repo_dir, &issue_id);
         let branch = implement::branch_name(&issue_id);
 
@@ -429,6 +450,7 @@ impl App {
             description,
             design: None,
             repo_dir,
+            base_branch,
         };
         let tx = self.impl_tx.clone();
 
@@ -584,7 +606,7 @@ impl App {
                         {
                             self.enrich_issue(issue);
                         } else {
-                            self.auto_implement_if_eligible(&issue_id);
+                            self.auto_implement_if_eligible(&issue_id).await;
                         }
                     }
                 }

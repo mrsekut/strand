@@ -114,7 +114,7 @@ async fn handle_epic_list_key(key: KeyCode, app: &mut App) {
             app.notification = None;
             match key {
                 KeyCode::Char('e') => app.start_enrich(),
-                KeyCode::Char('i') => app.start_implement(),
+                KeyCode::Char('i') => app.start_implement().await,
                 _ => {}
             }
         }
@@ -221,7 +221,7 @@ async fn handle_issue_detail_key(
             app.notification = None;
             match key {
                 KeyCode::Char('e') => app.start_enrich(),
-                KeyCode::Char('i') => app.start_implement(),
+                KeyCode::Char('i') => app.start_implement().await,
                 _ => {}
             }
             return;

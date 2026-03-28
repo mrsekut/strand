@@ -34,6 +34,7 @@ pub struct ImplRequest {
     pub description: Option<String>,
     pub design: Option<String>,
     pub repo_dir: PathBuf,
+    pub base_branch: String,
 }
 
 pub fn worktree_path(repo_dir: &PathBuf, issue_id: &str) -> PathBuf {
@@ -105,14 +106,18 @@ When done, commit your changes. The commit message body must record the backgrou
     parts.join("\n\n")
 }
 
-async fn create_worktree(repo_dir: &PathBuf, issue_id: &str) -> Result<(PathBuf, String)> {
+async fn create_worktree(
+    repo_dir: &PathBuf,
+    issue_id: &str,
+    base_branch: &str,
+) -> Result<(PathBuf, String)> {
     let wt_path = worktree_path(repo_dir, issue_id);
     let branch = branch_name(issue_id);
 
     let output = Command::new("git")
         .args(["worktree", "add"])
         .arg(&wt_path)
-        .args(["-b", &branch])
+        .args(["-b", &branch, base_branch])
         .current_dir(repo_dir)
         .output()
         .await?;
@@ -282,7 +287,8 @@ pub async fn run(request: ImplRequest, tx: mpsc::Sender<ImplEvent>) -> Result<()
 }
 
 async fn run_inner(request: &ImplRequest) -> Result<String> {
-    let (wt_path, _branch) = create_worktree(&request.repo_dir, &request.issue_id).await?;
+    let (wt_path, _branch) =
+        create_worktree(&request.repo_dir, &request.issue_id, &request.base_branch).await?;
 
     let prompt = build_prompt(request);
 
