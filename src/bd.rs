@@ -170,12 +170,14 @@ pub async fn list_ready_ids(
     Ok(issues.into_iter().map(|i| i.id).collect())
 }
 
-/// Quick capture: epic, P2 で issue を作成し、ID を返す
+/// Quick capture: task, P2 で issue を作成し、strand-needs-enrichラベルを付与してIDを返す
 pub async fn quick_create(dir: Option<&str>, title: &str) -> Result<String> {
     let stdout = run_bd(
         dir,
-        ["q", title, "--type", "epic", "--priority", "2"].as_slice(),
+        ["q", title, "--type", "task", "--priority", "2"].as_slice(),
     )
     .await?;
-    Ok(String::from_utf8_lossy(&stdout).trim().to_string())
+    let id = String::from_utf8_lossy(&stdout).trim().to_string();
+    add_label(dir, &id, "strand-needs-enrich").await?;
+    Ok(id)
 }
