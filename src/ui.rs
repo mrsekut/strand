@@ -56,7 +56,7 @@ pub fn epic_icon(app: &App, issue: &Issue) -> (&'static str, Style) {
             ImplStatus::Failed(_) => ("✗", Style::default().fg(Color::Red)),
         };
     }
-    if app.enriching_ids.contains(&issue.id) {
+    if app.enrich_manager.is_enriching(&issue.id) {
         return ("⟳", Style::default().fg(Color::Yellow));
     }
     if issue.labels.contains(&"strand-unread".to_string()) {

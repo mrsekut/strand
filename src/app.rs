@@ -12,7 +12,7 @@ use ratatui::prelude::*;
 use tokio::sync::mpsc;
 
 use crate::bd::{self, Issue};
-use crate::enrich::{self, EnrichEvent};
+use crate::enrich::{self, EnrichManager, EnrichOutcome};
 use crate::implement::{self, ImplEvent, ImplJob, ImplStatus};
 use crate::split::{self, SplitEvent};
 
@@ -63,9 +63,8 @@ pub struct App {
     pub selected: usize,
     pub view: View,
     pub dir: Option<String>,
-    pub enrich_tx: mpsc::Sender<EnrichEvent>,
-    pub enrich_rx: mpsc::Receiver<EnrichEvent>,
-    pub enriching_ids: HashSet<String>,
+    pub enrich_manager: EnrichManager,
+    pub enrich_rx: mpsc::Receiver<enrich::EnrichEvent>,
     pub impl_tx: mpsc::Sender<ImplEvent>,
     pub impl_rx: mpsc::Receiver<ImplEvent>,
     pub impl_jobs: HashMap<String, ImplJob>,
@@ -87,9 +86,8 @@ impl App {
             selected: 0,
             view: View::IssueList,
             dir,
-            enrich_tx,
+            enrich_manager: EnrichManager::new(enrich_tx),
             enrich_rx,
-            enriching_ids: HashSet::new(),
             impl_tx,
             impl_rx,
             impl_jobs: HashMap::new(),
@@ -380,60 +378,25 @@ impl App {
             _ => self.selected_issue().cloned(),
         };
         let Some(issue) = issue else { return };
-        self.enrich_issue(issue);
+        self.enrich_manager.start(&issue, self.dir.clone());
     }
 
-    fn enrich_issue(&mut self, issue: Issue) {
-        let issue_id = issue.id.clone();
-
-        if self.enriching_ids.contains(&issue_id) {
-            return;
-        }
-
-        self.enriching_ids.insert(issue_id.clone());
-
-        let request = enrich::EnrichRequest {
-            issue_id,
-            title: issue.title.clone(),
-            description: issue.description.clone(),
-        };
-        let dir = self.dir.clone();
-        let tx = self.enrich_tx.clone();
-
-        tokio::spawn(async move {
-            let _ = enrich::run(request, dir, tx).await;
-        });
-    }
-
-    /// strand-needs-enrichラベルを持つissueを自動的にenrichする
     pub fn auto_enrich(&mut self) {
-        let unenriched: Vec<Issue> = self
-            .issues
-            .iter()
-            .filter(|issue| {
-                issue.labels.contains(&"strand-needs-enrich".to_string())
-                    && !self.enriching_ids.contains(&issue.id)
-            })
-            .cloned()
-            .collect();
-
-        for issue in unenriched {
-            self.enrich_issue(issue);
-        }
+        self.enrich_manager
+            .auto_enrich(&self.issues, self.dir.clone());
     }
 
-    pub async fn handle_enrich_event(&mut self, event: EnrichEvent) {
-        match event {
-            EnrichEvent::Started { issue_id } => {
+    pub async fn handle_enrich_event(&mut self, event: enrich::EnrichEvent) {
+        let outcome = self.enrich_manager.handle_event(event);
+        match outcome {
+            EnrichOutcome::Started { issue_id } => {
                 self.notify(format!("Enriching: {issue_id}..."));
             }
-            EnrichEvent::Completed { issue_id } => {
-                self.enriching_ids.remove(&issue_id);
+            EnrichOutcome::Completed { issue_id } => {
                 self.notify(format!("Enriched: {issue_id}"));
                 let _ = self.load_issues().await;
             }
-            EnrichEvent::Failed { issue_id, error } => {
-                self.enriching_ids.remove(&issue_id);
+            EnrichOutcome::Failed { issue_id, error } => {
                 self.notify(format!("Enrich failed: {issue_id}: {error}"));
             }
         }
