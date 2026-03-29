@@ -53,21 +53,13 @@ pub enum View {
         child_selected: usize,
         scroll_offset: u16,
     },
-    ChildDetail {
-        epic_id: String,
-        issue_id: String,
-        children: Vec<Issue>,
-        ready_ids: HashSet<String>,
-        child_selected: usize,
-        scroll_offset: u16,
-        diff: Option<Vec<u8>>,
-    },
 }
 
 pub struct App {
     pub issues: Vec<Issue>,
     pub selected: usize,
     pub view: View,
+    pub view_stack: Vec<View>,
     pub dir: Option<String>,
     pub enrich_manager: EnrichManager,
     pub enrich_rx: mpsc::Receiver<ai_enrich::EnrichEvent>,
@@ -89,6 +81,7 @@ impl App {
             issues: Vec::new(),
             selected: 0,
             view: View::IssueList,
+            view_stack: Vec::new(),
             dir,
             enrich_manager: EnrichManager::new(enrich_tx),
             enrich_rx,
@@ -153,7 +146,7 @@ impl App {
                     *child_selected = (*child_selected + 1).min(children.len() - 1);
                 }
             }
-            View::IssueDetail { scroll_offset, .. } | View::ChildDetail { scroll_offset, .. } => {
+            View::IssueDetail { scroll_offset, .. } => {
                 *scroll_offset = scroll_offset.saturating_add(1);
             }
         }
@@ -169,7 +162,7 @@ impl App {
             View::EpicDetail { child_selected, .. } => {
                 *child_selected = child_selected.saturating_sub(1);
             }
-            View::IssueDetail { scroll_offset, .. } | View::ChildDetail { scroll_offset, .. } => {
+            View::IssueDetail { scroll_offset, .. } => {
                 *scroll_offset = scroll_offset.saturating_sub(1);
             }
         }
@@ -177,6 +170,7 @@ impl App {
 
     // --- Navigation ---
 
+    /// IssueListからissueを開く
     pub async fn open_detail(&mut self) {
         let Some(issue) = self.selected_issue() else {
             return;
@@ -195,34 +189,10 @@ impl App {
             });
         }
 
-        // 子issueの有無で分岐
-        let children = bd::list_children(self.dir.as_deref(), &issue_id)
-            .await
-            .unwrap_or_default();
-
-        if children.is_empty() {
-            // 子なし → IssueDetail
-            self.view = View::IssueDetail {
-                issue_id: issue_id.clone(),
-                scroll_offset: 0,
-                diff: None,
-            };
-            self.load_issue_detail_diff(&issue_id).await;
-        } else {
-            // 子あり → EpicDetail
-            let ready_ids = bd::list_ready_ids(self.dir.as_deref(), &issue_id)
-                .await
-                .unwrap_or_default();
-            self.view = View::EpicDetail {
-                epic_id: issue_id,
-                children,
-                ready_ids,
-                child_selected: 0,
-                scroll_offset: 0,
-            };
-        }
+        self.push_view_for_issue(&issue_id).await;
     }
 
+    /// EpicDetailから子issueを開く
     pub async fn open_child_detail(&mut self) {
         let issue_id = match &self.view {
             View::EpicDetail {
@@ -234,56 +204,48 @@ impl App {
         };
         let Some(issue_id) = issue_id else { return };
 
-        // EpicDetailからChildDetailへ状態を移動
-        let old = std::mem::replace(&mut self.view, View::IssueList);
-        let View::EpicDetail {
-            epic_id,
-            children,
-            ready_ids,
-            child_selected,
-            ..
-        } = old
-        else {
-            unreachable!()
-        };
+        self.push_view_for_issue(&issue_id).await;
+    }
 
-        self.view = View::ChildDetail {
-            epic_id,
-            issue_id: issue_id.clone(),
-            children,
-            ready_ids,
-            child_selected,
-            scroll_offset: 0,
-            diff: None,
-        };
-        self.load_issue_detail_diff(&issue_id).await;
+    /// issue_idに応じてIssueDetail or EpicDetailをスタックにpush
+    async fn push_view_for_issue(&mut self, issue_id: &str) {
+        let children = bd::list_children(self.dir.as_deref(), issue_id)
+            .await
+            .unwrap_or_default();
+
+        let old = std::mem::replace(&mut self.view, View::IssueList);
+        self.view_stack.push(old);
+
+        if children.is_empty() {
+            self.view = View::IssueDetail {
+                issue_id: issue_id.to_string(),
+                scroll_offset: 0,
+                diff: None,
+            };
+            self.load_issue_detail_diff(issue_id).await;
+        } else {
+            let ready_ids = bd::list_ready_ids(self.dir.as_deref(), issue_id)
+                .await
+                .unwrap_or_default();
+            self.view = View::EpicDetail {
+                epic_id: issue_id.to_string(),
+                children,
+                ready_ids,
+                child_selected: 0,
+                scroll_offset: 0,
+            };
+        }
     }
 
     pub fn back(&mut self) {
-        let old = std::mem::replace(&mut self.view, View::IssueList);
-        self.view = match old {
-            v @ View::IssueList => v,
-            View::IssueDetail { .. } => View::IssueList,
-            View::EpicDetail { .. } => View::IssueList,
-            View::ChildDetail {
-                epic_id,
-                children,
-                ready_ids,
-                child_selected,
-                ..
-            } => View::EpicDetail {
-                epic_id,
-                children,
-                ready_ids,
-                child_selected,
-                scroll_offset: 0,
-            },
-        };
+        if let Some(prev) = self.view_stack.pop() {
+            self.view = prev;
+        }
     }
 
     pub async fn reload_children(&mut self) {
         let epic_id = match &self.view {
-            View::EpicDetail { epic_id, .. } | View::ChildDetail { epic_id, .. } => epic_id.clone(),
+            View::EpicDetail { epic_id, .. } => epic_id.clone(),
             _ => return,
         };
         let new_children = bd::list_children(self.dir.as_deref(), &epic_id)
@@ -298,11 +260,6 @@ impl App {
                 children,
                 ready_ids,
                 ..
-            }
-            | View::ChildDetail {
-                children,
-                ready_ids,
-                ..
             } => {
                 *children = new_children;
                 *ready_ids = new_ready;
@@ -314,7 +271,7 @@ impl App {
     async fn load_issue_detail_diff(&mut self, issue_id: &str) {
         let computed = self.compute_diff(issue_id).await;
         match &mut self.view {
-            View::IssueDetail { diff, .. } | View::ChildDetail { diff, .. } => {
+            View::IssueDetail { diff, .. } => {
                 *diff = computed;
             }
             _ => {}
@@ -332,11 +289,11 @@ impl App {
         let branch = job.branch.clone();
         let repo_dir = self.repo_dir();
 
-        // epicコンテキストな���epicブランチとの差分を表示
-        let base = match &self.view {
-            View::ChildDetail { epic_id, .. } => ai_implement::epic_branch_name(epic_id),
-            _ => "master".to_string(),
-        };
+        // epicコンテキストならepicブランチとの差分を表示
+        let base = self
+            .find_parent_epic_id()
+            .map(|eid| ai_implement::epic_branch_name(&eid))
+            .unwrap_or_else(|| "master".to_string());
         let range = format!("{base}..{branch}");
 
         let output = tokio::process::Command::new("sh")
@@ -360,6 +317,16 @@ impl App {
         }
     }
 
+    /// スタックを遡って直近のEpicDetailのepic_idを探す
+    fn find_parent_epic_id(&self) -> Option<String> {
+        for view in self.view_stack.iter().rev() {
+            if let View::EpicDetail { epic_id, .. } = view {
+                return Some(epic_id.clone());
+            }
+        }
+        None
+    }
+
     pub fn selected_issue(&self) -> Option<&Issue> {
         self.issues.get(self.selected)
     }
@@ -367,9 +334,8 @@ impl App {
     /// 現在のview contextで対象となるissue_idを返す
     fn current_issue_id(&self) -> Option<String> {
         match &self.view {
-            View::IssueDetail { issue_id, .. } | View::ChildDetail { issue_id, .. } => {
-                Some(issue_id.clone())
-            }
+            View::IssueDetail { issue_id, .. } => Some(issue_id.clone()),
+            View::EpicDetail { epic_id, .. } => Some(epic_id.clone()),
             _ => self.selected_issue().map(|i| i.id.clone()),
         }
     }
@@ -377,19 +343,19 @@ impl App {
     /// 現在のview contextで対象となるissue_id + epic_idを返す
     fn current_issue_id_with_epic(&self) -> Option<(String, Option<String>)> {
         match &self.view {
-            View::ChildDetail {
-                issue_id, epic_id, ..
-            } => Some((issue_id.clone(), Some(epic_id.clone()))),
             View::EpicDetail {
-                epic_id,
                 children,
                 child_selected,
                 ..
             } => {
                 let child = children.get(*child_selected)?;
-                Some((child.id.clone(), Some(epic_id.clone())))
+                let epic_id = self.find_parent_epic_id();
+                Some((child.id.clone(), epic_id))
             }
-            View::IssueDetail { issue_id, .. } => Some((issue_id.clone(), None)),
+            View::IssueDetail { issue_id, .. } => {
+                let epic_id = self.find_parent_epic_id();
+                Some((issue_id.clone(), epic_id))
+            }
             _ => self.selected_issue().map(|i| (i.id.clone(), None)),
         }
     }
@@ -397,11 +363,13 @@ impl App {
     /// 現在のview contextで対象となるIssueを返す
     fn current_issue(&self) -> Option<Issue> {
         match &self.view {
-            View::ChildDetail {
-                issue_id, children, ..
-            } => children.iter().find(|i| i.id == *issue_id).cloned(),
             View::IssueDetail { issue_id, .. } => {
-                self.issues.iter().find(|i| i.id == *issue_id).cloned()
+                // issuesまたはスタック内のEpicDetailのchildrenから探す
+                self.issues
+                    .iter()
+                    .find(|i| i.id == *issue_id)
+                    .cloned()
+                    .or_else(|| self.find_issue_in_stack(issue_id))
             }
             View::EpicDetail {
                 children,
@@ -410,6 +378,18 @@ impl App {
             } => children.get(*child_selected).cloned(),
             _ => self.selected_issue().cloned(),
         }
+    }
+
+    /// スタック内のEpicDetailのchildrenからissueを探す
+    fn find_issue_in_stack(&self, issue_id: &str) -> Option<Issue> {
+        for view in self.view_stack.iter().rev() {
+            if let View::EpicDetail { children, .. } = view {
+                if let Some(issue) = children.iter().find(|i| i.id == issue_id) {
+                    return Some(issue.clone());
+                }
+            }
+        }
+        None
     }
 
     // --- Enrich ---
@@ -505,12 +485,10 @@ impl App {
         let Some(issue) = self.current_issue() else {
             return;
         };
-        let epic_id = match &self.view {
-            View::ChildDetail { epic_id, .. } | View::EpicDetail { epic_id, .. } => {
-                Some(epic_id.clone())
-            }
+        let epic_id = self.find_parent_epic_id().or_else(|| match &self.view {
+            View::EpicDetail { epic_id, .. } => Some(epic_id.clone()),
             _ => None,
-        };
+        });
 
         let repo_dir = self.repo_dir();
         if let Err(e) = self
@@ -656,9 +634,12 @@ impl App {
     ) {
         // EpicDetailではepic自体を編集（子issueではなく）
         let issue = match &self.view {
-            View::EpicDetail { epic_id, .. } => {
-                self.issues.iter().find(|i| i.id == *epic_id).cloned()
-            }
+            View::EpicDetail { epic_id, .. } => self
+                .issues
+                .iter()
+                .find(|i| i.id == *epic_id)
+                .cloned()
+                .or_else(|| self.find_issue_in_stack(epic_id)),
             _ => self.current_issue(),
         };
         let Some(issue) = issue else { return };
@@ -742,7 +723,7 @@ impl App {
             }
         }
 
-        self.view = View::IssueList;
+        self.back();
         let _ = self.load_issues().await;
         if self.selected >= self.issues.len() && self.selected > 0 {
             self.selected -= 1;

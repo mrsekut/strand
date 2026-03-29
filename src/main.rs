@@ -5,7 +5,6 @@ mod app;
 mod bd;
 mod clipboard;
 mod editor;
-mod page_child_detail;
 mod page_epic_detail;
 mod page_issue_detail;
 mod page_issue_list;
@@ -86,7 +85,6 @@ async fn run(
                             View::IssueList => page_issue_list::keys::handle_key(key.code, app).await,
                             View::IssueDetail { .. } => page_issue_detail::keys::handle_key(key.code, app, terminal).await,
                             View::EpicDetail { .. } => page_epic_detail::keys::handle_key(key.code, app, terminal).await,
-                            View::ChildDetail { .. } => page_child_detail::keys::handle_key(key.code, app, terminal).await,
                         }
                     }
                     Some(Ok(_)) => {}

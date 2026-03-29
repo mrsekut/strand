@@ -21,7 +21,16 @@ pub fn draw(frame: &mut Frame, app: &App) {
         } => (issue_id, *scroll_offset, diff),
         _ => return,
     };
-    let issue = match app.issues.iter().find(|i| i.id == *issue_id) {
+    // TopLevelのissuesまたはスタック内EpicDetailのchildrenから探す
+    let issue = match app.issues.iter().find(|i| i.id == *issue_id).or_else(|| {
+        app.view_stack.iter().rev().find_map(|v| {
+            if let View::EpicDetail { children, .. } = v {
+                children.iter().find(|i| i.id == *issue_id)
+            } else {
+                None
+            }
+        })
+    }) {
         Some(i) => i,
         None => return,
     };
