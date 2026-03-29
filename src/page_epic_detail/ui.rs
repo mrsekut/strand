@@ -178,7 +178,6 @@ fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
             if app.all_children_closed() {
                 keys.push(("m", "merge to master"));
             }
-            keys.push(("q", "quit"));
             keys
         }
     };

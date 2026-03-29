@@ -14,7 +14,7 @@ use std::io::stdout;
 use std::time::Duration;
 
 use anyhow::Result;
-use app::{App, InputMode, View};
+use app::{App, View};
 use crossterm::{
     ExecutableCommand,
     event::{Event, EventStream, KeyCode},
@@ -78,7 +78,7 @@ async fn run(
             maybe_event = event_stream.next() => {
                 match maybe_event {
                     Some(Ok(Event::Key(key))) => {
-                        if key.code == KeyCode::Char('q') && app.input_mode == InputMode::Normal {
+                        if key.code == KeyCode::Char('c') && key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) {
                             break;
                         }
                         match &app.view {

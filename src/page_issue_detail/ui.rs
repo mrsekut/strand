@@ -170,7 +170,6 @@ fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
             ("e", "edit"),
             ("a", "ai"),
             ("x", "close"),
-            ("q", "quit"),
         ],
     };
 
