@@ -76,9 +76,10 @@ async fn run(
                             break;
                         }
                         match &app.view {
-                            View::EpicList => handle_epic_list_key(key.code, app).await,
-                            View::EpicDetail { .. } => handle_epic_detail_key(key.code, app, terminal).await,
+                            View::IssueList => handle_issue_list_key(key.code, app).await,
                             View::IssueDetail { .. } => handle_issue_detail_key(key.code, app, terminal).await,
+                            View::EpicDetail { .. } => handle_epic_detail_key(key.code, app, terminal).await,
+                            View::ChildDetail { .. } => handle_child_detail_key(key.code, app, terminal).await,
                         }
                     }
                     Some(Ok(_)) => {}
@@ -107,7 +108,7 @@ async fn run(
 
 // --- Epic List ---
 
-async fn handle_epic_list_key(key: KeyCode, app: &mut App) {
+async fn handle_issue_list_key(key: KeyCode, app: &mut App) {
     match app.input_mode {
         InputMode::AwaitingAI => {
             app.input_mode = InputMode::Normal;
@@ -140,7 +141,7 @@ async fn handle_epic_list_key(key: KeyCode, app: &mut App) {
         InputMode::Normal => match key {
             KeyCode::Down | KeyCode::Char('j') => app.next(),
             KeyCode::Up | KeyCode::Char('k') => app.previous(),
-            KeyCode::Enter => app.open_epic_detail().await,
+            KeyCode::Enter => app.open_detail().await,
             KeyCode::Char('c') => app.copy_id(),
             KeyCode::Char('a') => {
                 app.input_mode = InputMode::AwaitingAI;
@@ -195,7 +196,7 @@ async fn handle_epic_detail_key(
         KeyCode::Esc => app.back(),
         KeyCode::Down | KeyCode::Char('j') => app.next(),
         KeyCode::Up | KeyCode::Char('k') => app.previous(),
-        KeyCode::Enter => app.open_issue_detail().await,
+        KeyCode::Enter => app.open_child_detail().await,
         KeyCode::Char('c') => app.copy_id(),
         KeyCode::Char('e') => app.edit_description(terminal).await,
         KeyCode::Char('a') => {
@@ -214,9 +215,76 @@ async fn handle_epic_detail_key(
     }
 }
 
-// --- Issue Detail ---
+// --- Standalone Issue Detail (子なしissue) ---
 
 async fn handle_issue_detail_key(
+    key: KeyCode,
+    app: &mut App,
+    terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+) {
+    match app.input_mode {
+        InputMode::AwaitingAI => {
+            app.input_mode = InputMode::Normal;
+            app.notification = None;
+            match key {
+                KeyCode::Char('e') => app.start_enrich(),
+                KeyCode::Char('i') => app.start_implement().await,
+                _ => {}
+            }
+            return;
+        }
+        InputMode::AwaitingConfirm(action) => {
+            app.input_mode = InputMode::Normal;
+            app.notification = None;
+            if let KeyCode::Char('y') = key {
+                match action {
+                    ConfirmAction::Close => {
+                        app.close_issue().await;
+                        app.back();
+                    }
+                    ConfirmAction::Merge => {
+                        app.merge_impl().await;
+                        app.back();
+                    }
+                    ConfirmAction::Discard => app.discard_impl().await,
+                    _ => {}
+                }
+            }
+            return;
+        }
+        _ => {}
+    }
+
+    match key {
+        KeyCode::Esc => app.back(),
+        KeyCode::Down => app.next(),
+        KeyCode::Up => app.previous(),
+        KeyCode::Char('c') => app.copy_id(),
+        KeyCode::Char('p') => app.copy_worktree_path(),
+        KeyCode::Char('e') => app.edit_description(terminal).await,
+        KeyCode::Char('m') => {
+            app.input_mode = InputMode::AwaitingConfirm(ConfirmAction::Merge);
+            app.notification = Some(("Merge? (y/n)".into(), std::time::Instant::now()));
+        }
+        KeyCode::Char('d') => {
+            app.input_mode = InputMode::AwaitingConfirm(ConfirmAction::Discard);
+            app.notification = Some(("Discard? (y/n)".into(), std::time::Instant::now()));
+        }
+        KeyCode::Char('a') => {
+            app.input_mode = InputMode::AwaitingAI;
+            app.notification = Some(("a-...".into(), std::time::Instant::now()));
+        }
+        KeyCode::Char('x') => {
+            app.input_mode = InputMode::AwaitingConfirm(ConfirmAction::Close);
+            app.notification = Some(("Close? (y/n)".into(), std::time::Instant::now()));
+        }
+        _ => {}
+    }
+}
+
+// --- Child Detail (epic配下のissue) ---
+
+async fn handle_child_detail_key(
     key: KeyCode,
     app: &mut App,
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
