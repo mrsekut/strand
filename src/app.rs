@@ -14,6 +14,7 @@ use tokio::sync::mpsc;
 use crate::bd::{self, Issue};
 use crate::enrich::{self, EnrichEvent};
 use crate::implement::{self, ImplEvent, ImplJob, ImplStatus};
+use crate::split::{self, SplitEvent};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfirmAction {
@@ -50,6 +51,9 @@ pub struct App {
     pub impl_tx: mpsc::Sender<ImplEvent>,
     pub impl_rx: mpsc::Receiver<ImplEvent>,
     pub impl_jobs: HashMap<String, ImplJob>,
+    pub split_tx: mpsc::Sender<SplitEvent>,
+    pub split_rx: mpsc::Receiver<SplitEvent>,
+    pub splitting_ids: HashSet<String>,
     pub notification: Option<(String, Instant)>,
     pub last_db_mtime: Option<SystemTime>,
     pub input_mode: InputMode,
@@ -65,6 +69,7 @@ impl App {
     pub fn new(dir: Option<String>) -> Self {
         let (enrich_tx, enrich_rx) = mpsc::channel(32);
         let (impl_tx, impl_rx) = mpsc::channel(32);
+        let (split_tx, split_rx) = mpsc::channel(32);
         Self {
             issues: Vec::new(),
             selected: 0,
@@ -76,6 +81,9 @@ impl App {
             impl_tx,
             impl_rx,
             impl_jobs: HashMap::new(),
+            split_tx,
+            split_rx,
+            splitting_ids: HashSet::new(),
             notification: None,
             last_db_mtime: None,
             input_mode: InputMode::Normal,
@@ -397,6 +405,75 @@ impl App {
             EnrichEvent::Failed { issue_id, error } => {
                 self.enriching_ids.remove(&issue_id);
                 self.notify(format!("Enrich failed: {issue_id}: {error}"));
+            }
+        }
+    }
+
+    // --- Split ---
+
+    pub fn start_split(&mut self) {
+        let issue = match &self.view {
+            View::IssueDetail { issue_id } => {
+                self.issues.iter().find(|i| i.id == *issue_id).cloned()
+            }
+            _ => self.selected_issue().cloned(),
+        };
+        let Some(issue) = issue else { return };
+
+        if self.splitting_ids.contains(&issue.id) {
+            return;
+        }
+
+        self.splitting_ids.insert(issue.id.clone());
+
+        let request = split::SplitRequest {
+            issue_id: issue.id.clone(),
+            title: issue.title.clone(),
+            description: issue.description.clone(),
+        };
+        let dir = self.dir.clone();
+        let tx = self.split_tx.clone();
+
+        tokio::spawn(async move {
+            let _ = split::run(request, dir, tx).await;
+        });
+    }
+
+    pub async fn handle_split_event(&mut self, event: SplitEvent) {
+        match event {
+            SplitEvent::Started { issue_id } => {
+                self.notify(format!("Splitting: {issue_id}..."));
+            }
+            SplitEvent::Completed {
+                issue_id,
+                task_count,
+            } => {
+                self.splitting_ids.remove(&issue_id);
+                self.notify(format!("Split: {issue_id} → {task_count} tasks"));
+                let _ = self.load_issues().await;
+                // IssueDetailにいた場合、子ができたのでEpicDetailに遷移
+                if let View::IssueDetail { issue_id: ref vid } = self.view {
+                    if *vid == issue_id {
+                        let children = bd::list_children(self.dir.as_deref(), &issue_id)
+                            .await
+                            .unwrap_or_default();
+                        if !children.is_empty() {
+                            self.children = children;
+                            match bd::list_ready_ids(self.dir.as_deref(), &issue_id).await {
+                                Ok(ids) => self.ready_ids = ids,
+                                Err(_) => self.ready_ids = HashSet::new(),
+                            }
+                            self.view = View::EpicDetail {
+                                epic_id: issue_id,
+                            };
+                            self.child_selected = 0;
+                        }
+                    }
+                }
+            }
+            SplitEvent::Failed { issue_id, error } => {
+                self.splitting_ids.remove(&issue_id);
+                self.notify(format!("Split failed: {issue_id}: {error}"));
             }
         }
     }

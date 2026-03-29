@@ -170,6 +170,46 @@ pub async fn list_ready_ids(
     Ok(issues.into_iter().map(|i| i.id).collect())
 }
 
+pub async fn update_type(dir: Option<&str>, id: &str, issue_type: &str) -> Result<()> {
+    run_bd(dir, ["update", id, "--type", issue_type].as_slice()).await?;
+    Ok(())
+}
+
+/// 子issueを作成しIDを返す
+pub async fn create_child(
+    dir: Option<&str>,
+    parent_id: &str,
+    title: &str,
+    description: &str,
+) -> Result<String> {
+    let stdout = run_bd(
+        dir,
+        [
+            "create",
+            "--title",
+            title,
+            "--type",
+            "task",
+            "--parent",
+            parent_id,
+            "--description",
+            description,
+        ]
+        .as_slice(),
+    )
+    .await?;
+    let output = String::from_utf8_lossy(&stdout);
+    // "Created issue: strand-xxx" のようなフォーマットからIDを抽出
+    let id = output
+        .lines()
+        .find_map(|line| line.strip_prefix("✓ Created issue: "))
+        .or_else(|| output.lines().find_map(|line| line.strip_prefix("Created issue: ")))
+        .unwrap_or(output.trim())
+        .trim()
+        .to_string();
+    Ok(id)
+}
+
 /// Quick capture: task, P2 で issue を作成し、strand-needs-enrichラベルを付与してIDを返す
 pub async fn quick_create(dir: Option<&str>, title: &str) -> Result<String> {
     let stdout = run_bd(

@@ -2,6 +2,7 @@ mod app;
 mod bd;
 mod enrich;
 mod implement;
+mod split;
 mod ui;
 
 use std::io::stdout;
@@ -93,6 +94,9 @@ async fn run(
             Some(event) = app.impl_rx.recv() => {
                 app.handle_impl_event(event);
             }
+            Some(event) = app.split_rx.recv() => {
+                app.handle_split_event(event).await;
+            }
             _ = poll_interval.tick() => {
                 if app.has_db_changed() {
                     let _ = app.load_issues().await;
@@ -116,6 +120,7 @@ async fn handle_issue_list_key(key: KeyCode, app: &mut App) {
             match key {
                 KeyCode::Char('e') => app.start_enrich(),
                 KeyCode::Char('i') => app.start_implement().await,
+                KeyCode::Char('s') => app.start_split(),
                 _ => {}
             }
         }
@@ -229,6 +234,7 @@ async fn handle_issue_detail_key(
             match key {
                 KeyCode::Char('e') => app.start_enrich(),
                 KeyCode::Char('i') => app.start_implement().await,
+                KeyCode::Char('s') => app.start_split(),
                 _ => {}
             }
             return;

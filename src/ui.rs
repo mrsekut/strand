@@ -532,7 +532,7 @@ fn draw_issue_list_keybar(frame: &mut Frame, app: &App, area: Rect) {
     use crate::app::{ConfirmAction, InputMode};
 
     let keys: Vec<(&str, &str)> = match app.input_mode {
-        InputMode::AwaitingAI => vec![("e", "enrich"), ("i", "implement"), ("Esc", "cancel")],
+        InputMode::AwaitingAI => vec![("e", "enrich"), ("i", "implement"), ("s", "split"), ("Esc", "cancel")],
         InputMode::AwaitingPriority => vec![("0-4", "priority"), ("Esc", "cancel")],
         InputMode::AwaitingConfirm(action) => {
             let label = match action {
@@ -596,7 +596,7 @@ fn draw_standalone_issue_keybar(frame: &mut Frame, app: &App, area: Rect) {
     use crate::app::{ConfirmAction, InputMode};
 
     let keys: Vec<(&str, &str)> = match app.input_mode {
-        InputMode::AwaitingAI => vec![("e", "enrich"), ("i", "implement"), ("Esc", "cancel")],
+        InputMode::AwaitingAI => vec![("e", "enrich"), ("i", "implement"), ("s", "split"), ("Esc", "cancel")],
         InputMode::AwaitingConfirm(action) => {
             let label = match action {
                 ConfirmAction::Close => "confirm close",
