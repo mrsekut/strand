@@ -32,6 +32,8 @@ pub enum InputMode {
     AwaitingConfirm(ConfirmAction),
 }
 
+// TODO: View enumに各viewの固有状態(selected, children, scroll_offset等)を持たせて
+// Appからフラットな状態フィールドを除去する。clear漏れバグの構造的防止が目的。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum View {
     IssueList,
@@ -206,9 +208,7 @@ impl App {
                 Ok(ids) => self.ready_ids = ids,
                 Err(_) => self.ready_ids = HashSet::new(),
             }
-            self.view = View::EpicDetail {
-                epic_id: issue_id,
-            };
+            self.view = View::EpicDetail { epic_id: issue_id };
             self.child_selected = 0;
             self.scroll_offset = 0;
         }
@@ -326,12 +326,8 @@ impl App {
     /// 現在のview contextで対象となるissueを返す
     pub fn current_issue(&self) -> Option<&Issue> {
         match &self.view {
-            View::ChildDetail { issue_id, .. } => {
-                self.children.iter().find(|i| i.id == *issue_id)
-            }
-            View::IssueDetail { issue_id } => {
-                self.issues.iter().find(|i| i.id == *issue_id)
-            }
+            View::ChildDetail { issue_id, .. } => self.children.iter().find(|i| i.id == *issue_id),
+            View::IssueDetail { issue_id } => self.issues.iter().find(|i| i.id == *issue_id),
             View::EpicDetail { .. } | View::IssueList => self.selected_issue(),
         }
     }
@@ -462,9 +458,7 @@ impl App {
                                 Ok(ids) => self.ready_ids = ids,
                                 Err(_) => self.ready_ids = HashSet::new(),
                             }
-                            self.view = View::EpicDetail {
-                                epic_id: issue_id,
-                            };
+                            self.view = View::EpicDetail { epic_id: issue_id };
                             self.child_selected = 0;
                         }
                     }
@@ -624,8 +618,7 @@ impl App {
             Some(eid) => implement::epic_branch_name(eid),
             None => "master".to_string(),
         };
-        let merge_result =
-            implement::merge_into_branch(&repo_dir, &job.branch, &target).await;
+        let merge_result = implement::merge_into_branch(&repo_dir, &job.branch, &target).await;
 
         if let Err(e) = merge_result {
             self.notify(format!("Merge failed: {e}"));
@@ -648,9 +641,7 @@ impl App {
 
     pub async fn discard_impl(&mut self) {
         let issue_id = match &self.view {
-            View::IssueDetail { issue_id } | View::ChildDetail { issue_id, .. } => {
-                issue_id.clone()
-            }
+            View::IssueDetail { issue_id } | View::ChildDetail { issue_id, .. } => issue_id.clone(),
             _ => {
                 let Some(issue) = self.selected_issue() else {
                     return;
@@ -681,9 +672,7 @@ impl App {
 
     pub async fn close_issue(&mut self) {
         let issue_id = match &self.view {
-            View::IssueDetail { issue_id } | View::ChildDetail { issue_id, .. } => {
-                issue_id.clone()
-            }
+            View::IssueDetail { issue_id } | View::ChildDetail { issue_id, .. } => issue_id.clone(),
             _ => {
                 let Some(issue) = self.selected_issue() else {
                     return;
@@ -730,9 +719,7 @@ impl App {
 
     pub fn copy_id(&mut self) {
         let id = match &self.view {
-            View::IssueDetail { issue_id } | View::ChildDetail { issue_id, .. } => {
-                issue_id.clone()
-            }
+            View::IssueDetail { issue_id } | View::ChildDetail { issue_id, .. } => issue_id.clone(),
             _ => {
                 let Some(issue) = self.selected_issue() else {
                     return;
@@ -745,9 +732,7 @@ impl App {
 
     pub fn copy_worktree_path(&mut self) {
         let issue_id = match &self.view {
-            View::IssueDetail { issue_id } | View::ChildDetail { issue_id, .. } => {
-                issue_id.clone()
-            }
+            View::IssueDetail { issue_id } | View::ChildDetail { issue_id, .. } => issue_id.clone(),
             _ => {
                 let Some(issue) = self.selected_issue() else {
                     return;

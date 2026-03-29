@@ -2,6 +2,7 @@ mod app;
 mod bd;
 mod enrich;
 mod implement;
+mod issue_list;
 mod split;
 mod ui;
 
@@ -77,7 +78,7 @@ async fn run(
                             break;
                         }
                         match &app.view {
-                            View::IssueList => handle_issue_list_key(key.code, app).await,
+                            View::IssueList => issue_list::keys::handle_key(key.code, app).await,
                             View::IssueDetail { .. } => handle_issue_detail_key(key.code, app, terminal).await,
                             View::EpicDetail { .. } => handle_epic_detail_key(key.code, app, terminal).await,
                             View::ChildDetail { .. } => handle_child_detail_key(key.code, app, terminal).await,
@@ -108,61 +109,6 @@ async fn run(
         }
     }
     Ok(())
-}
-
-// --- Epic List ---
-
-async fn handle_issue_list_key(key: KeyCode, app: &mut App) {
-    match app.input_mode {
-        InputMode::AwaitingAI => {
-            app.input_mode = InputMode::Normal;
-            app.notification = None;
-            match key {
-                KeyCode::Char('e') => app.start_enrich(),
-                KeyCode::Char('i') => app.start_implement().await,
-                KeyCode::Char('s') => app.start_split(),
-                _ => {}
-            }
-        }
-        InputMode::AwaitingPriority => {
-            app.input_mode = InputMode::Normal;
-            app.notification = None;
-            if let KeyCode::Char(c @ '0'..='4') = key {
-                app.set_priority(c as u8 - b'0').await;
-            }
-        }
-        InputMode::AwaitingConfirm(action) => {
-            app.input_mode = InputMode::Normal;
-            app.notification = None;
-            if let KeyCode::Char('y') = key {
-                match action {
-                    ConfirmAction::Close => app.close_issue().await,
-                    ConfirmAction::Merge => app.merge_impl().await,
-                    ConfirmAction::Discard => app.discard_impl().await,
-                    ConfirmAction::MergeEpic => app.merge_epic().await,
-                }
-            }
-        }
-        InputMode::Normal => match key {
-            KeyCode::Down | KeyCode::Char('j') => app.next(),
-            KeyCode::Up | KeyCode::Char('k') => app.previous(),
-            KeyCode::Enter => app.open_detail().await,
-            KeyCode::Char('c') => app.copy_id(),
-            KeyCode::Char('a') => {
-                app.input_mode = InputMode::AwaitingAI;
-                app.notification = Some(("a-...".into(), std::time::Instant::now()));
-            }
-            KeyCode::Char('x') => {
-                app.input_mode = InputMode::AwaitingConfirm(ConfirmAction::Close);
-                app.notification = Some(("Close? (y/n)".into(), std::time::Instant::now()));
-            }
-            KeyCode::Char('p') => {
-                app.input_mode = InputMode::AwaitingPriority;
-                app.notification = Some(("p-...".into(), std::time::Instant::now()));
-            }
-            _ => {}
-        },
-    }
 }
 
 // --- Epic Detail ---
@@ -210,7 +156,10 @@ async fn handle_epic_detail_key(
         }
         KeyCode::Char('m') if app.all_children_closed() => {
             app.input_mode = InputMode::AwaitingConfirm(ConfirmAction::MergeEpic);
-            app.notification = Some(("Merge epic to master? (y/n)".into(), std::time::Instant::now()));
+            app.notification = Some((
+                "Merge epic to master? (y/n)".into(),
+                std::time::Instant::now(),
+            ));
         }
         KeyCode::Char('x') => {
             app.input_mode = InputMode::AwaitingConfirm(ConfirmAction::Close);

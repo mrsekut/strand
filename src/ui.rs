@@ -8,10 +8,11 @@ use chrono::{DateTime, FixedOffset};
 use crate::app::{App, View};
 use crate::bd::{self, Issue};
 use crate::implement::ImplStatus;
+use crate::issue_list;
 
 pub fn draw(frame: &mut Frame, app: &App) {
     match &app.view {
-        View::IssueList => draw_issue_list(frame, app),
+        View::IssueList => issue_list::ui::draw(frame, app),
         View::IssueDetail { .. } => draw_standalone_issue_detail(frame, app),
         View::EpicDetail { .. } => draw_epic_detail(frame, app),
         View::ChildDetail { .. } => draw_child_detail(frame, app),
@@ -25,7 +26,7 @@ fn format_timestamp(iso: &str) -> String {
     }
 }
 
-fn priority_style(priority: Option<u8>) -> Style {
+pub fn priority_style(priority: Option<u8>) -> Style {
     match priority {
         Some(0) => Style::default().fg(Color::Magenta),
         Some(1) => Style::default().fg(Color::Red),
@@ -35,7 +36,7 @@ fn priority_style(priority: Option<u8>) -> Style {
     }
 }
 
-fn status_style(status: &str) -> Style {
+pub fn status_style(status: &str) -> Style {
     match status {
         "open" => Style::default().fg(Color::Green),
         "in_progress" => Style::default().fg(Color::Cyan),
@@ -45,7 +46,7 @@ fn status_style(status: &str) -> Style {
     }
 }
 
-fn epic_icon(app: &App, issue: &Issue) -> (&'static str, Style) {
+pub fn epic_icon(app: &App, issue: &Issue) -> (&'static str, Style) {
     if let Some(job) = app.impl_jobs.get(&issue.id) {
         return match &job.status {
             ImplStatus::Running => ("⚡", Style::default().fg(Color::Magenta)),
@@ -77,54 +78,6 @@ fn child_icon(app: &App, issue: &Issue) -> (&'static str, Style) {
         return ("○", Style::default().fg(Color::Green));
     }
     ("·", Style::default().fg(Color::DarkGray))
-}
-
-// --- Epic List ---
-
-fn draw_issue_list(frame: &mut Frame, app: &App) {
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Min(1),
-            Constraint::Length(1),
-            Constraint::Length(1),
-        ])
-        .split(frame.area());
-
-    let rows: Vec<Row> = app
-        .issues
-        .iter()
-        .map(|issue| {
-            let (icon, icon_style) = epic_icon(app, issue);
-            let priority_text = issue.priority.map(|p| format!("P{p}")).unwrap_or_default();
-            Row::new(vec![
-                Cell::from(icon).style(icon_style),
-                Cell::from(bd::short_id(&issue.id).to_string())
-                    .style(Style::default().fg(Color::DarkGray)),
-                Cell::from(priority_text).style(priority_style(issue.priority)),
-                Cell::from(issue.title.clone()),
-            ])
-        })
-        .collect();
-
-    let widths = [
-        Constraint::Length(2),
-        Constraint::Length(4),
-        Constraint::Length(3),
-        Constraint::Min(10),
-    ];
-
-    let table = Table::new(rows, widths)
-        .row_highlight_style(Style::default().bg(Color::Rgb(70, 70, 90)))
-        .highlight_symbol("▶ ");
-
-    let mut state = TableState::default();
-    state.select(Some(app.selected));
-
-    frame.render_stateful_widget(table, chunks[0], &mut state);
-
-    draw_issue_list_keybar(frame, app, chunks[1]);
-    draw_notification(frame, app, chunks[2]);
 }
 
 // --- Epic Detail ---
@@ -504,13 +457,13 @@ fn draw_child_detail(frame: &mut Frame, app: &App) {
 
 // --- Key bars ---
 
-fn padded_keybar_line(keys: &[(&str, &str)]) -> Line<'static> {
+pub fn padded_keybar_line(keys: &[(&str, &str)]) -> Line<'static> {
     let mut line = keybar_line(keys);
     line.spans.insert(0, Span::raw(" "));
     line
 }
 
-fn keybar_line(keys: &[(&str, &str)]) -> Line<'static> {
+pub fn keybar_line(keys: &[(&str, &str)]) -> Line<'static> {
     let sep_style = Style::default().fg(Color::DarkGray);
     let key_style = Style::default()
         .fg(Color::Yellow)
@@ -526,35 +479,6 @@ fn keybar_line(keys: &[(&str, &str)]) -> Line<'static> {
         spans.push(Span::styled(format!(" {desc}"), desc_style));
     }
     Line::from(spans)
-}
-
-fn draw_issue_list_keybar(frame: &mut Frame, app: &App, area: Rect) {
-    use crate::app::{ConfirmAction, InputMode};
-
-    let keys: Vec<(&str, &str)> = match app.input_mode {
-        InputMode::AwaitingAI => vec![("e", "enrich"), ("i", "implement"), ("s", "split"), ("Esc", "cancel")],
-        InputMode::AwaitingPriority => vec![("0-4", "priority"), ("Esc", "cancel")],
-        InputMode::AwaitingConfirm(action) => {
-            let label = match action {
-                ConfirmAction::Close => "confirm close",
-                ConfirmAction::Merge => "confirm merge",
-                ConfirmAction::Discard => "confirm discard",
-                ConfirmAction::MergeEpic => "confirm merge epic to master",
-            };
-            vec![("y", label), ("n", "cancel")]
-        }
-        InputMode::Normal => vec![
-            ("Enter", "detail"),
-            ("c", "copy id"),
-            ("p", "priority"),
-            ("a", "ai"),
-            ("x", "close"),
-            ("q", "quit"),
-        ],
-    };
-
-    let line = padded_keybar_line(&keys);
-    frame.render_widget(Paragraph::new(line), area);
 }
 
 fn draw_epic_detail_keybar(frame: &mut Frame, app: &App, area: Rect) {
@@ -650,7 +574,7 @@ fn draw_child_keybar(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(Paragraph::new(line), area);
 }
 
-fn draw_notification(frame: &mut Frame, app: &App, area: Rect) {
+pub fn draw_notification(frame: &mut Frame, app: &App, area: Rect) {
     if let Some((msg, time)) = &app.notification {
         if time.elapsed().as_secs() < 5 {
             let status =
