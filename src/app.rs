@@ -400,7 +400,6 @@ impl App {
                 self.enriching_ids.remove(&issue_id);
                 self.notify(format!("Enriched: {issue_id}"));
                 let _ = self.load_issues().await;
-                self.auto_implement_if_eligible(&issue_id).await;
             }
             EnrichEvent::Failed { issue_id, error } => {
                 self.enriching_ids.remove(&issue_id);
@@ -474,21 +473,6 @@ impl App {
             SplitEvent::Failed { issue_id, error } => {
                 self.splitting_ids.remove(&issue_id);
                 self.notify(format!("Split failed: {issue_id}: {error}"));
-            }
-        }
-    }
-
-    /// p0/p1かつenrich済みのissueに対して自動でimplementを開始する
-    async fn auto_implement_if_eligible(&mut self, issue_id: &str) {
-        if self.impl_jobs.contains_key(issue_id) {
-            return;
-        }
-        if let Some(issue) = self.issues.iter().find(|i| i.id == issue_id).cloned() {
-            let is_high_priority = issue.priority.map_or(false, |p| p <= 1);
-            let is_enriched = issue.labels.contains(&"strand-enriched".to_string());
-            if is_high_priority && is_enriched {
-                // auto-implはepicコンテキスト外なのでbase_branch=None(master)
-                self.start_implement_issue(&issue, None).await;
             }
         }
     }
@@ -735,19 +719,6 @@ impl App {
             Ok(_) => {
                 self.notify(format!("Priority set: {issue_id} → P{priority}"));
                 let _ = self.load_issues().await;
-
-                // p0/p1に設定された場合、未enrichならenrich開始（完了時にauto-implが発火）
-                if priority <= 1 {
-                    if let Some(issue) = self.issues.iter().find(|i| i.id == issue_id).cloned() {
-                        if !issue.labels.contains(&"strand-enriched".to_string())
-                            && !self.enriching_ids.contains(&issue_id)
-                        {
-                            self.enrich_issue(issue);
-                        } else {
-                            self.auto_implement_if_eligible(&issue_id).await;
-                        }
-                    }
-                }
             }
             Err(e) => {
                 self.notify(format!("Priority update failed: {e}"));
