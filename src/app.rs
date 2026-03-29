@@ -14,7 +14,7 @@ use tokio::sync::mpsc;
 use crate::bd::{self, Issue};
 use crate::enrich::{self, EnrichManager, EnrichOutcome};
 use crate::implement::{self, ImplManager, ImplOutcome, ImplStatus};
-use crate::split::{self, SplitEvent};
+use crate::split::{self, SplitManager, SplitOutcome};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfirmAction {
@@ -67,9 +67,8 @@ pub struct App {
     pub enrich_rx: mpsc::Receiver<enrich::EnrichEvent>,
     pub impl_manager: ImplManager,
     pub impl_rx: mpsc::Receiver<implement::ImplEvent>,
-    pub split_tx: mpsc::Sender<SplitEvent>,
-    pub split_rx: mpsc::Receiver<SplitEvent>,
-    pub splitting_ids: HashSet<String>,
+    pub split_manager: SplitManager,
+    pub split_rx: mpsc::Receiver<split::SplitEvent>,
     pub notification: Option<(String, Instant)>,
     pub last_db_mtime: Option<SystemTime>,
     pub input_mode: InputMode,
@@ -89,9 +88,8 @@ impl App {
             enrich_rx,
             impl_manager: ImplManager::new(impl_tx),
             impl_rx,
-            split_tx,
+            split_manager: SplitManager::new(split_tx),
             split_rx,
-            splitting_ids: HashSet::new(),
             notification: None,
             last_db_mtime: None,
             input_mode: InputMode::Normal,
@@ -407,36 +405,19 @@ impl App {
             _ => self.selected_issue().cloned(),
         };
         let Some(issue) = issue else { return };
-
-        if self.splitting_ids.contains(&issue.id) {
-            return;
-        }
-
-        self.splitting_ids.insert(issue.id.clone());
-
-        let request = split::SplitRequest {
-            issue_id: issue.id.clone(),
-            title: issue.title.clone(),
-            description: issue.description.clone(),
-        };
-        let dir = self.dir.clone();
-        let tx = self.split_tx.clone();
-
-        tokio::spawn(async move {
-            let _ = split::run(request, dir, tx).await;
-        });
+        self.split_manager.start(&issue, self.dir.clone());
     }
 
-    pub async fn handle_split_event(&mut self, event: SplitEvent) {
-        match event {
-            SplitEvent::Started { issue_id } => {
+    pub async fn handle_split_event(&mut self, event: split::SplitEvent) {
+        let outcome = self.split_manager.handle_event(event);
+        match outcome {
+            SplitOutcome::Started { issue_id } => {
                 self.notify(format!("Splitting: {issue_id}..."));
             }
-            SplitEvent::Completed {
+            SplitOutcome::Completed {
                 issue_id,
                 task_count,
             } => {
-                self.splitting_ids.remove(&issue_id);
                 self.notify(format!("Split: {issue_id} → {task_count} tasks"));
                 let _ = self.load_issues().await;
                 // IssueDetailにいた場合、子ができたのでEpicDetailに遷移
@@ -462,8 +443,7 @@ impl App {
                     }
                 }
             }
-            SplitEvent::Failed { issue_id, error } => {
-                self.splitting_ids.remove(&issue_id);
+            SplitOutcome::Failed { issue_id, error } => {
                 self.notify(format!("Split failed: {issue_id}: {error}"));
             }
         }
