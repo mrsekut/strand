@@ -616,7 +616,10 @@ impl App {
         let Some(id) = self.current_issue_id() else {
             return;
         };
-        self.copy_to_clipboard(&id);
+        match crate::clipboard::copy(&id) {
+            Ok(_) => self.notify(format!("Copied: {id}")),
+            Err(e) => self.notify(format!("Copy failed: {e}")),
+        }
     }
 
     pub fn copy_worktree_path(&mut self) {
@@ -628,21 +631,8 @@ impl App {
             return;
         };
         let path = job.worktree_path.display().to_string();
-        self.copy_to_clipboard(&path);
-    }
-
-    fn copy_to_clipboard(&mut self, text: &str) {
-        let result = std::process::Command::new("pbcopy")
-            .stdin(std::process::Stdio::piped())
-            .spawn()
-            .and_then(|mut child| {
-                use std::io::Write;
-                child.stdin.as_mut().unwrap().write_all(text.as_bytes())?;
-                child.wait()
-            });
-
-        match result {
-            Ok(_) => self.notify(format!("Copied: {text}")),
+        match crate::clipboard::copy(&path) {
+            Ok(_) => self.notify(format!("Copied: {path}")),
             Err(e) => self.notify(format!("Copy failed: {e}")),
         }
     }
