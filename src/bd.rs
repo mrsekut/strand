@@ -177,7 +177,13 @@ pub async fn list_children(dir: Option<&str>, parent_id: &str) -> Result<Vec<Iss
         .as_slice(),
     )
     .await?;
-    let issues: Vec<Issue> = serde_json::from_slice(&stdout)?;
+    let mut issues: Vec<Issue> = serde_json::from_slice(&stdout)?;
+    issues.sort_by(|a, b| {
+        let num = |id: &str| -> u64 {
+            id.rsplit_once('.').and_then(|(_, n)| n.parse().ok()).unwrap_or(0)
+        };
+        num(&a.id).cmp(&num(&b.id))
+    });
     Ok(issues)
 }
 
