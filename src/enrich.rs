@@ -199,6 +199,7 @@ async fn run_inner(request: &EnrichRequest, dir: Option<&str>) -> Result<()> {
     let description = format_enriched(current_desc, &enrich_result);
 
     bd::update_description(dir, &request.issue_id, &description).await?;
+    bd::remove_label(dir, &request.issue_id, "strand-needs-enrich").await?;
     bd::add_label(dir, &request.issue_id, "strand-enriched").await?;
     bd::add_label(dir, &request.issue_id, "strand-unread").await?;
 
