@@ -12,9 +12,11 @@ cargo run -- --dir /tmp/strand-sandbox  # sandbox for testing
 
 | Term             | Definition                                                              | Code                                       |
 | ---------------- | ----------------------------------------------------------------------- | ------------------------------------------ |
-| Issue            | Work unit managed by strand. Persisted in beads DB                      | `bd::Issue`                                |
-| Epic             | Issue with children. `issue_type == "epic"`. Created by Split           | `Issue` (issue_type="epic")                |
-| Child            | Issue under an Epic. Created via `bd create --parent`                   | `Issue` (with parent)                      |
+| Issue            | Work unit managed by strand. Persisted in beads DB. Umbrella term for all types below | `bd::Issue`                  |
+| TopLevel Issue   | Issue without a parent. Shown in IssueList. Either Epic or Standalone   | ID has no `.` (e.g. `strand-abc`)          |
+| Epic             | TopLevel Issue with children. `issue_type == "epic"`. Created by Split  | `Issue` (issue_type="epic")                |
+| Standalone Issue | TopLevel Issue without children. May become Epic via Split              | `Issue` (no children)                      |
+| Child Issue      | Issue under an Epic. Not shown in IssueList                             | ID has `.` (e.g. `strand-abc.1`)           |
 | Enrich           | AI analyzes issue, appends problems + solution proposals to description | `ai_enrich::run()`                         |
 | Split            | AI decomposes issue into subtasks, creating Epic + Children structure   | `ai_split::run()`                          |
 | Implement (Impl) | Creates git worktree, AI writes code                                    | `ai_implement::run()`                      |
