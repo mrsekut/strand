@@ -6,8 +6,13 @@ use tokio::process::Command;
 use super::epic_branch_name;
 use super::worktree::{epic_branch_exists, run_git};
 
-/// source_branchをtarget_branchにmergeする（一時worktreeを使用）
-pub async fn merge_into_branch(
+/// メインworktreeで直接mergeする（masterへのmerge用）
+async fn merge_direct(repo_dir: &Path, source_branch: &str) -> Result<()> {
+    run_git(repo_dir, &["merge", source_branch]).await
+}
+
+/// 一時worktreeを作ってmergeする（epic branchへのmerge用）
+async fn merge_via_worktree(
     repo_dir: &Path,
     source_branch: &str,
     target_branch: &str,
@@ -18,7 +23,13 @@ pub async fn merge_into_branch(
         .join(format!("strand-merge-tmp-{}", std::process::id()));
 
     let output = Command::new("git")
-        .args(["worktree", "add", "-f", &tmp_dir.to_string_lossy(), target_branch])
+        .args([
+            "worktree",
+            "add",
+            "-f",
+            &tmp_dir.to_string_lossy(),
+            target_branch,
+        ])
         .current_dir(repo_dir)
         .output()
         .await?;
@@ -40,6 +51,20 @@ pub async fn merge_into_branch(
     merge_result
 }
 
+/// source_branchをtarget_branchにmergeする
+/// masterへは直接merge、それ以外は一時worktree経由
+pub async fn merge_into_branch(
+    repo_dir: &Path,
+    source_branch: &str,
+    target_branch: &str,
+) -> Result<()> {
+    if target_branch == "master" {
+        merge_direct(repo_dir, source_branch).await
+    } else {
+        merge_via_worktree(repo_dir, source_branch, target_branch).await
+    }
+}
+
 /// epicブランチをmasterにmerge後、epicブランチを削除
 pub async fn merge_epic_to_master(repo_dir: &Path, epic_id: &str) -> Result<()> {
     let branch = epic_branch_name(epic_id);
@@ -48,7 +73,7 @@ pub async fn merge_epic_to_master(repo_dir: &Path, epic_id: &str) -> Result<()> 
         anyhow::bail!("epic branch '{}' does not exist", branch);
     }
 
-    merge_into_branch(repo_dir, &branch, "master").await?;
+    merge_direct(repo_dir, &branch).await?;
     run_git(repo_dir, &["branch", "-D", &branch]).await?;
 
     Ok(())
