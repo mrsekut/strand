@@ -3,8 +3,6 @@ use std::path::Path;
 use anyhow::Result;
 use tokio::process::Command;
 
-use crate::bd;
-
 use super::epic_branch_name;
 use super::worktree::{epic_branch_exists, run_git};
 
@@ -50,36 +48,7 @@ pub async fn merge_epic_to_master(repo_dir: &Path, epic_id: &str) -> Result<()> 
         anyhow::bail!("epic branch '{}' does not exist", branch);
     }
 
-    let wt_path = repo_dir
-        .parent()
-        .unwrap_or(repo_dir)
-        .join(format!("strand-merge-{}", bd::short_id(epic_id)));
-
-    let add_output = Command::new("git")
-        .args(["worktree", "add"])
-        .arg(&wt_path)
-        .arg("master")
-        .current_dir(repo_dir)
-        .output()
-        .await?;
-
-    if !add_output.status.success() {
-        anyhow::bail!(
-            "failed to create worktree for master: {}",
-            String::from_utf8_lossy(&add_output.stderr)
-        );
-    }
-
-    let merge_result = run_git(&wt_path, &["merge", &branch]).await;
-
-    let _ = run_git(
-        repo_dir,
-        &["worktree", "remove", "--force", &wt_path.to_string_lossy()],
-    )
-    .await;
-
-    merge_result?;
-
+    merge_into_branch(repo_dir, &branch, "master").await?;
     run_git(repo_dir, &["branch", "-D", &branch]).await?;
 
     Ok(())
