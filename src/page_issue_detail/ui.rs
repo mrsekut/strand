@@ -5,8 +5,8 @@ use ratatui::{
 
 use chrono::{DateTime, FixedOffset};
 
-use crate::app::{App, ConfirmAction, InputMode, View};
 use crate::ai_implement::ImplStatus;
+use crate::app::{App, InputMode, View};
 use crate::ui::{
     draw_notification, format_timestamp, keybar_line, padded_keybar_line, priority_style,
     status_style,
@@ -152,13 +152,7 @@ fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
             ("Esc", "cancel"),
         ],
         InputMode::AwaitingConfirm(action) => {
-            let label = match action {
-                ConfirmAction::Close => "confirm close",
-                ConfirmAction::Merge => "confirm merge",
-                ConfirmAction::Discard => "confirm discard",
-                ConfirmAction::MergeEpic => "confirm merge epic to master",
-            };
-            vec![("y", label), ("n", "cancel")]
+            vec![("y", action.label()), ("n", "cancel")]
         }
         _ => vec![
             ("Esc", "back"),

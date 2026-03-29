@@ -3,7 +3,7 @@ use ratatui::{
     widgets::{Cell, Paragraph, Row, Table, TableState},
 };
 
-use crate::app::{App, ConfirmAction, InputMode};
+use crate::app::{App, InputMode};
 use crate::bd;
 use crate::ui::{draw_notification, epic_icon, padded_keybar_line, priority_style};
 
@@ -63,13 +63,7 @@ fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
         ],
         InputMode::AwaitingPriority => vec![("0-4", "priority"), ("Esc", "cancel")],
         InputMode::AwaitingConfirm(action) => {
-            let label = match action {
-                ConfirmAction::Close => "confirm close",
-                ConfirmAction::Merge => "confirm merge",
-                ConfirmAction::Discard => "confirm discard",
-                ConfirmAction::MergeEpic => "confirm merge epic to master",
-            };
-            vec![("y", label), ("n", "cancel")]
+            vec![("y", action.label()), ("n", "cancel")]
         }
         InputMode::Normal => vec![
             ("Enter", "detail"),

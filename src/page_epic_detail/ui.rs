@@ -5,9 +5,9 @@ use ratatui::{
     widgets::{Cell, Paragraph, Row, Table, TableState, Wrap},
 };
 
-use crate::app::{App, ConfirmAction, InputMode, View};
-use crate::bd;
 use crate::ai_implement::ImplStatus;
+use crate::app::{App, InputMode, View};
+use crate::bd;
 use crate::ui::{
     draw_notification, format_timestamp, padded_keybar_line, priority_style, status_style,
 };
@@ -155,13 +155,7 @@ fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
     let keys: Vec<(&str, &str)> = match app.input_mode {
         InputMode::AwaitingAI => vec![("e", "enrich"), ("Esc", "cancel")],
         InputMode::AwaitingConfirm(action) => {
-            let label = match action {
-                ConfirmAction::Close => "confirm close",
-                ConfirmAction::Merge => "confirm merge",
-                ConfirmAction::Discard => "confirm discard",
-                ConfirmAction::MergeEpic => "confirm merge epic to master",
-            };
-            vec![("y", label), ("n", "cancel")]
+            vec![("y", action.label()), ("n", "cancel")]
         }
         _ => {
             let mut keys = vec![

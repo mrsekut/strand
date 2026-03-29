@@ -6,10 +6,10 @@ use anyhow::Result;
 use ratatui::prelude::*;
 use tokio::sync::mpsc;
 
-use crate::bd::{self, Issue};
 use crate::ai_enrich::{self, EnrichManager, EnrichOutcome};
 use crate::ai_implement::{self, ImplManager, ImplOutcome, ImplStatus};
 use crate::ai_split::{self, SplitManager, SplitOutcome};
+use crate::bd::{self, Issue};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfirmAction {
@@ -17,6 +17,17 @@ pub enum ConfirmAction {
     Merge,
     Discard,
     MergeEpic,
+}
+
+impl ConfirmAction {
+    pub fn label(&self) -> &'static str {
+        match self {
+            ConfirmAction::Close => "confirm close",
+            ConfirmAction::Merge => "confirm merge",
+            ConfirmAction::Discard => "confirm discard",
+            ConfirmAction::MergeEpic => "confirm merge epic to master",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
