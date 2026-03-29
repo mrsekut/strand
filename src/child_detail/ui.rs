@@ -13,11 +13,17 @@ use crate::ui::{
 };
 
 pub fn draw(frame: &mut Frame, app: &App) {
-    let issue_id = match &app.view {
-        View::ChildDetail { issue_id, .. } => issue_id,
+    let (issue_id, children, scroll_offset, detail_diff) = match &app.view {
+        View::ChildDetail {
+            issue_id,
+            children,
+            scroll_offset,
+            diff,
+            ..
+        } => (issue_id, children, *scroll_offset, diff),
         _ => return,
     };
-    let issue = match app.children.iter().find(|i| i.id == *issue_id) {
+    let issue = match children.iter().find(|i| i.id == *issue_id) {
         Some(i) => i,
         None => return,
     };
@@ -118,7 +124,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
     let md_text = tui_markdown::from_str(desc);
     lines.extend(md_text.lines);
 
-    if let Some(diff_bytes) = &app.detail_diff {
+    if let Some(diff_bytes) = detail_diff {
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
             "── Changes ──",
@@ -132,7 +138,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
 
     let paragraph = Paragraph::new(lines)
         .wrap(Wrap { trim: false })
-        .scroll((app.scroll_offset, 0));
+        .scroll((scroll_offset, 0));
 
     frame.render_widget(paragraph, content_area);
 

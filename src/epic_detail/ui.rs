@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use ratatui::{
     prelude::*,
     widgets::{Cell, Paragraph, Row, Table, TableState, Wrap},
@@ -10,7 +12,7 @@ use crate::ui::{
     draw_notification, format_timestamp, padded_keybar_line, priority_style, status_style,
 };
 
-fn child_icon(app: &App, issue: &bd::Issue) -> (&'static str, Style) {
+fn child_icon(app: &App, issue: &bd::Issue, ready_ids: &HashSet<String>) -> (&'static str, Style) {
     if let Some(job) = app.impl_jobs.get(&issue.id) {
         return match &job.status {
             ImplStatus::Running => ("⚡", Style::default().fg(Color::Magenta)),
@@ -21,15 +23,27 @@ fn child_icon(app: &App, issue: &bd::Issue) -> (&'static str, Style) {
     if issue.status == "closed" {
         return ("✓", Style::default().fg(Color::DarkGray));
     }
-    if app.ready_ids.contains(&issue.id) {
+    if ready_ids.contains(&issue.id) {
         return ("○", Style::default().fg(Color::Green));
     }
     ("·", Style::default().fg(Color::DarkGray))
 }
 
 pub fn draw(frame: &mut Frame, app: &App) {
-    let epic_id = match &app.view {
-        View::EpicDetail { epic_id } => epic_id,
+    let (epic_id, children, ready_ids, child_selected, scroll_offset) = match &app.view {
+        View::EpicDetail {
+            epic_id,
+            children,
+            ready_ids,
+            child_selected,
+            scroll_offset,
+        } => (
+            epic_id,
+            children,
+            ready_ids,
+            *child_selected,
+            *scroll_offset,
+        ),
         _ => return,
     };
     let epic = match app.issues.iter().find(|i| i.id == *epic_id) {
@@ -53,13 +67,10 @@ pub fn draw(frame: &mut Frame, app: &App) {
     });
 
     // Calculate layout: description gets scroll, children get fixed rows
-    let children_height = (app.children.len() as u16 + 2).min(content_area.height / 2); // +2 for header spacing
+    let children_height = (children.len() as u16 + 2).min(content_area.height / 2);
     let content_chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Min(3),                  // description
-            Constraint::Length(children_height), // children table
-        ])
+        .constraints([Constraint::Min(3), Constraint::Length(children_height)])
         .split(content_area);
 
     // Description section
@@ -97,16 +108,15 @@ pub fn draw(frame: &mut Frame, app: &App) {
 
     let paragraph = Paragraph::new(lines)
         .wrap(Wrap { trim: false })
-        .scroll((app.scroll_offset, 0));
+        .scroll((scroll_offset, 0));
     frame.render_widget(paragraph, content_chunks[0]);
 
     // Children section
-    if !app.children.is_empty() {
-        let rows: Vec<Row> = app
-            .children
+    if !children.is_empty() {
+        let rows: Vec<Row> = children
             .iter()
             .map(|issue| {
-                let (icon, icon_style) = child_icon(app, issue);
+                let (icon, icon_style) = child_icon(app, issue, ready_ids);
                 let priority_text = issue.priority.map(|p| format!("P{p}")).unwrap_or_default();
                 Row::new(vec![
                     Cell::from(icon).style(icon_style),
@@ -132,7 +142,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
             .highlight_symbol("▶ ");
 
         let mut state = TableState::default();
-        state.select(Some(app.child_selected));
+        state.select(Some(child_selected));
 
         frame.render_stateful_widget(table, content_chunks[1], &mut state);
     }
