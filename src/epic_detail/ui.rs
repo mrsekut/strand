@@ -1,0 +1,175 @@
+use ratatui::{
+    prelude::*,
+    widgets::{Cell, Paragraph, Row, Table, TableState, Wrap},
+};
+
+use crate::app::{App, ConfirmAction, InputMode, View};
+use crate::bd;
+use crate::implement::ImplStatus;
+use crate::ui::{
+    draw_notification, format_timestamp, padded_keybar_line, priority_style, status_style,
+};
+
+fn child_icon(app: &App, issue: &bd::Issue) -> (&'static str, Style) {
+    if let Some(job) = app.impl_jobs.get(&issue.id) {
+        return match &job.status {
+            ImplStatus::Running => ("⚡", Style::default().fg(Color::Magenta)),
+            ImplStatus::Done => ("✓", Style::default().fg(Color::Green)),
+            ImplStatus::Failed(_) => ("✗", Style::default().fg(Color::Red)),
+        };
+    }
+    if issue.status == "closed" {
+        return ("✓", Style::default().fg(Color::DarkGray));
+    }
+    if app.ready_ids.contains(&issue.id) {
+        return ("○", Style::default().fg(Color::Green));
+    }
+    ("·", Style::default().fg(Color::DarkGray))
+}
+
+pub fn draw(frame: &mut Frame, app: &App) {
+    let epic_id = match &app.view {
+        View::EpicDetail { epic_id } => epic_id,
+        _ => return,
+    };
+    let epic = match app.issues.iter().find(|i| i.id == *epic_id) {
+        Some(e) => e,
+        None => return,
+    };
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+        ])
+        .split(frame.area());
+
+    // Split content area: description (top) + child issue table (bottom)
+    let content_area = chunks[0].inner(Margin {
+        horizontal: 2,
+        vertical: 1,
+    });
+
+    // Calculate layout: description gets scroll, children get fixed rows
+    let children_height = (app.children.len() as u16 + 2).min(content_area.height / 2); // +2 for header spacing
+    let content_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(3),                  // description
+            Constraint::Length(children_height), // children table
+        ])
+        .split(content_area);
+
+    // Description section
+    let priority = epic
+        .priority
+        .map(|p| format!("P{p}"))
+        .unwrap_or_else(|| "N/A".into());
+
+    let mut lines = vec![
+        Line::from(vec![Span::styled(
+            &epic.title,
+            Style::default().add_modifier(Modifier::BOLD),
+        )]),
+        Line::from(vec![
+            Span::styled(&epic.id, Style::default().fg(Color::DarkGray)),
+            Span::raw("  "),
+            Span::styled(&epic.status, status_style(&epic.status)),
+            Span::raw("  "),
+            Span::styled(priority, priority_style(epic.priority)),
+        ]),
+    ];
+
+    if let Some(dt) = epic.updated_at.as_deref() {
+        lines.push(Line::from(vec![
+            Span::styled("updated ", Style::default().fg(Color::DarkGray)),
+            Span::styled(format_timestamp(dt), Style::default().fg(Color::DarkGray)),
+        ]));
+    }
+
+    lines.push(Line::from(""));
+
+    let desc = epic.description.as_deref().unwrap_or("(no description)");
+    let md_text = tui_markdown::from_str(desc);
+    lines.extend(md_text.lines);
+
+    let paragraph = Paragraph::new(lines)
+        .wrap(Wrap { trim: false })
+        .scroll((app.scroll_offset, 0));
+    frame.render_widget(paragraph, content_chunks[0]);
+
+    // Children section
+    if !app.children.is_empty() {
+        let rows: Vec<Row> = app
+            .children
+            .iter()
+            .map(|issue| {
+                let (icon, icon_style) = child_icon(app, issue);
+                let priority_text = issue.priority.map(|p| format!("P{p}")).unwrap_or_default();
+                Row::new(vec![
+                    Cell::from(icon).style(icon_style),
+                    Cell::from(bd::short_id(&issue.id).to_string())
+                        .style(Style::default().fg(Color::DarkGray)),
+                    Cell::from(priority_text).style(priority_style(issue.priority)),
+                    Cell::from(Span::styled(&issue.status, status_style(&issue.status))),
+                    Cell::from(issue.title.clone()),
+                ])
+            })
+            .collect();
+
+        let widths = [
+            Constraint::Length(2),
+            Constraint::Length(8),
+            Constraint::Length(3),
+            Constraint::Length(12),
+            Constraint::Min(10),
+        ];
+
+        let table = Table::new(rows, widths)
+            .row_highlight_style(Style::default().bg(Color::Rgb(70, 70, 90)))
+            .highlight_symbol("▶ ");
+
+        let mut state = TableState::default();
+        state.select(Some(app.child_selected));
+
+        frame.render_stateful_widget(table, content_chunks[1], &mut state);
+    }
+
+    draw_keybar(frame, app, chunks[1]);
+    draw_notification(frame, app, chunks[2]);
+}
+
+fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
+    let keys: Vec<(&str, &str)> = match app.input_mode {
+        InputMode::AwaitingAI => vec![("e", "enrich"), ("Esc", "cancel")],
+        InputMode::AwaitingConfirm(action) => {
+            let label = match action {
+                ConfirmAction::Close => "confirm close",
+                ConfirmAction::Merge => "confirm merge",
+                ConfirmAction::Discard => "confirm discard",
+                ConfirmAction::MergeEpic => "confirm merge epic to master",
+            };
+            vec![("y", label), ("n", "cancel")]
+        }
+        _ => {
+            let mut keys = vec![
+                ("Enter", "open issue"),
+                ("Esc", "back"),
+                ("c", "copy id"),
+                ("e", "edit"),
+                ("a", "ai"),
+                ("x", "close"),
+            ];
+            if app.all_children_closed() {
+                keys.push(("m", "merge to master"));
+            }
+            keys.push(("q", "quit"));
+            keys
+        }
+    };
+
+    let line = padded_keybar_line(&keys);
+    frame.render_widget(Paragraph::new(line), area);
+}
