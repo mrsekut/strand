@@ -90,7 +90,7 @@ pub async fn list_issues(dir: Option<&str>) -> Result<Vec<Issue>> {
     let issues: Vec<Issue> = serde_json::from_slice(&stdout)?;
     let issues = issues
         .into_iter()
-        .filter(|i| i.status != "closed" && i.issue_type.as_deref() == Some("epic"))
+        .filter(|i| i.status != "closed")
         .collect();
     Ok(issues)
 }
