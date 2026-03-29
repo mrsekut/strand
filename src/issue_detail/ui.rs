@@ -69,7 +69,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
     lines.push(Line::from(""));
 
     // Impl job info
-    if let Some(job) = app.impl_jobs.get(&issue.id) {
+    if let Some(job) = app.impl_manager.get_job(&issue.id) {
         let is_stale = {
             let impl_completed = job.completed_at.as_deref();
             let desc_updated = issue.updated_at.as_deref();

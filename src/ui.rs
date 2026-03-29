@@ -49,7 +49,7 @@ pub fn status_style(status: &str) -> Style {
 }
 
 pub fn epic_icon(app: &App, issue: &Issue) -> (&'static str, Style) {
-    if let Some(job) = app.impl_jobs.get(&issue.id) {
+    if let Some(job) = app.impl_manager.get_job(&issue.id) {
         return match &job.status {
             ImplStatus::Running => ("⚡", Style::default().fg(Color::Magenta)),
             ImplStatus::Done => ("✓", Style::default().fg(Color::Green)),

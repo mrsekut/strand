@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::io::stdout;
 use std::path::PathBuf;
 use std::time::{Instant, SystemTime};
@@ -13,7 +13,7 @@ use tokio::sync::mpsc;
 
 use crate::bd::{self, Issue};
 use crate::enrich::{self, EnrichManager, EnrichOutcome};
-use crate::implement::{self, ImplEvent, ImplJob, ImplStatus};
+use crate::implement::{self, ImplManager, ImplOutcome, ImplStatus};
 use crate::split::{self, SplitEvent};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -65,9 +65,8 @@ pub struct App {
     pub dir: Option<String>,
     pub enrich_manager: EnrichManager,
     pub enrich_rx: mpsc::Receiver<enrich::EnrichEvent>,
-    pub impl_tx: mpsc::Sender<ImplEvent>,
-    pub impl_rx: mpsc::Receiver<ImplEvent>,
-    pub impl_jobs: HashMap<String, ImplJob>,
+    pub impl_manager: ImplManager,
+    pub impl_rx: mpsc::Receiver<implement::ImplEvent>,
     pub split_tx: mpsc::Sender<SplitEvent>,
     pub split_rx: mpsc::Receiver<SplitEvent>,
     pub splitting_ids: HashSet<String>,
@@ -88,9 +87,8 @@ impl App {
             dir,
             enrich_manager: EnrichManager::new(enrich_tx),
             enrich_rx,
-            impl_tx,
+            impl_manager: ImplManager::new(impl_tx),
             impl_rx,
-            impl_jobs: HashMap::new(),
             split_tx,
             split_rx,
             splitting_ids: HashSet::new(),
@@ -113,10 +111,7 @@ impl App {
     pub async fn restore_impl_jobs(&mut self) {
         let repo_dir = self.repo_dir();
         let issue_ids: Vec<String> = self.issues.iter().map(|i| i.id.clone()).collect();
-        let discovered = implement::discover_worktrees(&repo_dir, &issue_ids).await;
-        for job in discovered {
-            self.impl_jobs.entry(job.issue_id.clone()).or_insert(job);
-        }
+        self.impl_manager.restore_jobs(&repo_dir, &issue_ids).await;
     }
 
     fn beads_db_path(&self) -> PathBuf {
@@ -323,7 +318,7 @@ impl App {
     }
 
     async fn compute_diff(&self, issue_id: &str) -> Option<Vec<u8>> {
-        let Some(job) = self.impl_jobs.get(issue_id) else {
+        let Some(job) = self.impl_manager.get_job(issue_id) else {
             return None;
         };
         if !matches!(job.status, ImplStatus::Done) {
@@ -510,88 +505,31 @@ impl App {
             _ => (self.selected_issue().cloned(), None),
         };
         let Some(issue) = issue else { return };
-        self.start_implement_issue(&issue, epic_id.as_deref()).await;
-    }
-
-    async fn start_implement_issue(&mut self, issue: &Issue, epic_id: Option<&str>) {
-        let issue_id = issue.id.clone();
-        let title = issue.title.clone();
-        let description = issue.description.clone();
-
-        if self.impl_jobs.contains_key(&issue_id) {
-            return;
-        }
 
         let repo_dir = self.repo_dir();
-
-        let base_branch = if let Some(eid) = epic_id {
-            match implement::ensure_epic_branch(&repo_dir, eid).await {
-                Ok(branch) => branch,
-                Err(e) => {
-                    self.notify(format!("Failed to create epic branch: {e}"));
-                    return;
-                }
-            }
-        } else {
-            "master".to_string()
-        };
-
-        let wt_path = implement::worktree_path(&repo_dir, &issue_id);
-        let branch = implement::branch_name(&issue_id);
-
-        self.impl_jobs.insert(
-            issue_id.clone(),
-            ImplJob {
-                issue_id: issue_id.clone(),
-                branch: branch.clone(),
-                worktree_path: wt_path,
-                status: ImplStatus::Running,
-                completed_at: None,
-            },
-        );
-
-        let request = implement::ImplRequest {
-            issue_id: issue_id.clone(),
-            title,
-            description,
-            design: None,
-            repo_dir,
-            base_branch,
-        };
-        let tx = self.impl_tx.clone();
-
-        tokio::spawn(async move {
-            let _ = implement::run(request, tx).await;
-        });
+        if let Err(e) = self
+            .impl_manager
+            .start(&issue, epic_id.as_deref(), &repo_dir, self.dir.clone())
+            .await
+        {
+            self.notify(format!("Failed to start impl: {e}"));
+        }
     }
 
-    pub fn handle_impl_event(&mut self, event: ImplEvent) {
-        match event {
-            ImplEvent::Started { issue_id } => {
+    pub fn handle_impl_event(&mut self, event: implement::ImplEvent) {
+        let dir = self.repo_dir().to_string_lossy().to_string();
+        let outcome = self.impl_manager.handle_event(event, &dir);
+        match outcome {
+            ImplOutcome::Started { issue_id } => {
                 self.notify(format!("Implementing: {issue_id}..."));
             }
-            ImplEvent::Completed { issue_id, summary } => {
-                if let Some(job) = self.impl_jobs.get_mut(&issue_id) {
-                    job.status = ImplStatus::Done;
-                    job.completed_at = Some(chrono::Local::now().to_rfc3339());
-                }
-                let summary_len = summary.len();
-                let dir = self.repo_dir().to_string_lossy().to_string();
-                let id = issue_id.clone();
-                tokio::spawn(async move {
-                    let content = format!("## Implementation Log\n{summary}");
-                    if let Err(e) = bd::append_to_description(Some(&dir), &id, &content).await {
-                        eprintln!("Failed to append impl log to {id}: {e}");
-                    }
-                });
+            ImplOutcome::Completed { issue_id, summary } => {
                 self.notify(format!(
-                    "Implementation done: {issue_id} (log: {summary_len} bytes)"
+                    "Implementation done: {issue_id} (log: {} bytes)",
+                    summary.len()
                 ));
             }
-            ImplEvent::Failed { issue_id, error } => {
-                if let Some(job) = self.impl_jobs.get_mut(&issue_id) {
-                    job.status = ImplStatus::Failed(error.clone());
-                }
+            ImplOutcome::Failed { issue_id, error } => {
                 self.notify(format!("Implement failed: {issue_id}: {error}"));
             }
         }
@@ -622,33 +560,21 @@ impl App {
             }
         };
 
-        let job = match self.impl_jobs.get(&issue_id) {
-            Some(job) if matches!(job.status, ImplStatus::Done) => job.clone(),
-            _ => return,
-        };
-
         let repo_dir = self.repo_dir();
-
-        let target = match &epic_id {
-            Some(eid) => implement::epic_branch_name(eid),
-            None => "master".to_string(),
-        };
-        let merge_result = implement::merge_into_branch(&repo_dir, &job.branch, &target).await;
-
-        if let Err(e) = merge_result {
+        if let Err(e) = self
+            .impl_manager
+            .merge(
+                &issue_id,
+                epic_id.as_deref(),
+                &repo_dir,
+                self.dir.as_deref(),
+            )
+            .await
+        {
             self.notify(format!("Merge failed: {e}"));
             return;
         }
 
-        if let Err(e) = implement::remove_worktree(&repo_dir, &job.worktree_path).await {
-            self.notify(format!("Worktree remove failed: {e}"));
-            return;
-        }
-
-        let _ = implement::delete_branch(&repo_dir, &job.branch).await;
-        let _ = bd::close_issue(self.dir.as_deref(), &issue_id).await;
-
-        self.impl_jobs.remove(&issue_id);
         self.notify(format!("Merged & closed: {issue_id}"));
         let _ = self.load_issues().await;
         self.reload_children().await;
@@ -667,21 +593,12 @@ impl App {
             }
         };
 
-        let job = match self.impl_jobs.get(&issue_id) {
-            Some(job) => job.clone(),
-            None => return,
-        };
-
         let repo_dir = self.repo_dir();
-
-        if let Err(e) = implement::remove_worktree(&repo_dir, &job.worktree_path).await {
-            self.notify(format!("Worktree remove failed: {e}"));
+        if let Err(e) = self.impl_manager.discard(&issue_id, &repo_dir).await {
+            self.notify(format!("Discard failed: {e}"));
             return;
         }
 
-        let _ = implement::delete_branch(&repo_dir, &job.branch).await;
-
-        self.impl_jobs.remove(&issue_id);
         self.notify(format!("Discarded: {issue_id}"));
     }
 
@@ -763,7 +680,7 @@ impl App {
                 issue.id.clone()
             }
         };
-        let Some(job) = self.impl_jobs.get(&issue_id) else {
+        let Some(job) = self.impl_manager.get_job(&issue_id) else {
             self.notify("No impl job found");
             return;
         };
@@ -927,24 +844,25 @@ impl App {
 
         let repo_dir = self.repo_dir();
 
-        if !implement::epic_branch_exists(&repo_dir, &epic_id).await {
-            let _ = bd::close_issue(self.dir.as_deref(), &epic_id).await;
-            self.notify(format!("No epic branch — closed: {epic_id}"));
-            self.view = View::IssueList;
-            let _ = self.load_issues().await;
-            if self.selected >= self.issues.len() && self.selected > 0 {
-                self.selected -= 1;
+        match self
+            .impl_manager
+            .merge_epic(&epic_id, &repo_dir, self.dir.as_deref())
+            .await
+        {
+            Ok(_) => {
+                self.notify(format!("Merged & closed epic: {epic_id}"));
             }
-            return;
+            Err(e) => {
+                let msg = e.to_string();
+                if msg == "no_epic_branch" {
+                    self.notify(format!("No epic branch — closed: {epic_id}"));
+                } else {
+                    self.notify(format!("Epic merge failed: {e}"));
+                    return;
+                }
+            }
         }
 
-        if let Err(e) = implement::merge_epic_to_master(&repo_dir, &epic_id).await {
-            self.notify(format!("Epic merge failed: {e}"));
-            return;
-        }
-
-        let _ = bd::close_issue(self.dir.as_deref(), &epic_id).await;
-        self.notify(format!("Merged & closed epic: {epic_id}"));
         self.view = View::IssueList;
         let _ = self.load_issues().await;
         if self.selected >= self.issues.len() && self.selected > 0 {
