@@ -90,19 +90,28 @@ pub async fn list_issues(dir: Option<&str>) -> Result<Vec<Issue>> {
     let stdout = run_bd(dir, ["list", "--json", "--limit", "0"].as_slice()).await?;
     let issues: Vec<Issue> = serde_json::from_slice(&stdout)?;
 
-    // epicの子IDを収集して除外
-    let epics: Vec<&Issue> = issues
+    // epicの子IDを並列取得して除外
+    let epic_ids: Vec<String> = issues
         .iter()
         .filter(|i| i.issue_type.as_deref() == Some("epic"))
+        .map(|i| i.id.clone())
         .collect();
-    let mut child_ids = std::collections::HashSet::new();
-    for epic in epics {
-        if let Ok(children) = list_children(dir, &epic.id).await {
-            for child in children {
-                child_ids.insert(child.id);
-            }
-        }
-    }
+
+    let dir_owned = dir.map(|d| d.to_string());
+    let futures: Vec<_> = epic_ids
+        .iter()
+        .map(|epic_id| {
+            let d = dir_owned.clone();
+            let eid = epic_id.clone();
+            async move { list_children(d.as_deref(), &eid).await.unwrap_or_default() }
+        })
+        .collect();
+
+    let results = futures::future::join_all(futures).await;
+    let child_ids: std::collections::HashSet<String> = results
+        .into_iter()
+        .flat_map(|children| children.into_iter().map(|c| c.id))
+        .collect();
 
     let issues = issues
         .into_iter()
