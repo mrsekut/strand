@@ -85,12 +85,28 @@ pub async fn check_init(dir: Option<&str>) -> Result<()> {
     Ok(())
 }
 
+/// TopLevel Issueのみを返す（Childは含まない）
 pub async fn list_issues(dir: Option<&str>) -> Result<Vec<Issue>> {
-    let stdout = run_bd(dir, ["list", "--json", "--limit", "0", "--all"].as_slice()).await?;
+    let stdout = run_bd(dir, ["list", "--json", "--limit", "0"].as_slice()).await?;
     let issues: Vec<Issue> = serde_json::from_slice(&stdout)?;
+
+    // epicの子IDを収集して除外
+    let epics: Vec<&Issue> = issues
+        .iter()
+        .filter(|i| i.issue_type.as_deref() == Some("epic"))
+        .collect();
+    let mut child_ids = std::collections::HashSet::new();
+    for epic in epics {
+        if let Ok(children) = list_children(dir, &epic.id).await {
+            for child in children {
+                child_ids.insert(child.id);
+            }
+        }
+    }
+
     let issues = issues
         .into_iter()
-        .filter(|i| i.status != "closed")
+        .filter(|i| !child_ids.contains(&i.id))
         .collect();
     Ok(issues)
 }
@@ -203,7 +219,11 @@ pub async fn create_child(
     let id = output
         .lines()
         .find_map(|line| line.strip_prefix("✓ Created issue: "))
-        .or_else(|| output.lines().find_map(|line| line.strip_prefix("Created issue: ")))
+        .or_else(|| {
+            output
+                .lines()
+                .find_map(|line| line.strip_prefix("Created issue: "))
+        })
         .unwrap_or(output.trim())
         .trim()
         .to_string();
