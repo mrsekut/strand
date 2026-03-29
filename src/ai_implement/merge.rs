@@ -18,7 +18,7 @@ pub async fn merge_into_branch(
         .join(format!("strand-merge-tmp-{}", std::process::id()));
 
     let output = Command::new("git")
-        .args(["worktree", "add", &tmp_dir.to_string_lossy(), target_branch])
+        .args(["worktree", "add", "-f", &tmp_dir.to_string_lossy(), target_branch])
         .current_dir(repo_dir)
         .output()
         .await?;
