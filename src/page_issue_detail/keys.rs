@@ -20,6 +20,16 @@ pub async fn handle_key(
             }
             return;
         }
+        InputMode::AwaitingYank => {
+            app.input_mode = InputMode::Normal;
+            app.notification = None;
+            match key {
+                KeyCode::Char('i') => app.copy_id(),
+                KeyCode::Char('p') => app.copy_worktree_path(),
+                _ => {}
+            }
+            return;
+        }
         InputMode::AwaitingConfirm(action) => {
             app.input_mode = InputMode::Normal;
             app.notification = None;
@@ -46,8 +56,10 @@ pub async fn handle_key(
         KeyCode::Esc => app.back(),
         KeyCode::Down => app.next(),
         KeyCode::Up => app.previous(),
-        KeyCode::Char('c') => app.copy_id(),
-        KeyCode::Char('p') => app.copy_worktree_path(),
+        KeyCode::Char('y') => {
+            app.input_mode = InputMode::AwaitingYank;
+            app.notification = Some(("y-...".into(), std::time::Instant::now()));
+        }
         KeyCode::Char('e') => app.edit_description(terminal).await,
         KeyCode::Char('m') => {
             app.input_mode = InputMode::AwaitingConfirm(ConfirmAction::Merge);

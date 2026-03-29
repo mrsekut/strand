@@ -61,13 +61,16 @@ fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
             ("s", "split"),
             ("Esc", "cancel"),
         ],
+        InputMode::AwaitingYank => {
+            vec![("i", "copy id"), ("p", "copy path"), ("Esc", "cancel")]
+        }
         InputMode::AwaitingPriority => vec![("0-4", "priority"), ("Esc", "cancel")],
         InputMode::AwaitingConfirm(action) => {
             vec![("y", action.label()), ("n", "cancel")]
         }
         InputMode::Normal => vec![
             ("Enter", "detail"),
-            ("c", "copy id"),
+            ("y", "yank"),
             ("p", "priority"),
             ("a", "ai"),
             ("x", "close"),
