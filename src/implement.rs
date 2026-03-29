@@ -157,10 +157,6 @@ pub async fn delete_branch(repo_dir: &PathBuf, branch: &str) -> Result<()> {
     run_git(repo_dir, ["branch", "-D", branch].as_slice()).await
 }
 
-pub async fn merge_branch(repo_dir: &PathBuf, branch: &str) -> Result<()> {
-    run_git(repo_dir, ["merge", branch].as_slice()).await
-}
-
 /// source_branchをtarget_branchにmergeする（一時worktreeを使用）
 pub async fn merge_into_branch(
     repo_dir: &Path,

@@ -558,13 +558,13 @@ impl App {
 
         let repo_dir = self.repo_dir();
 
-        // epicコンテキストならepicブランチへ、そうでなければカレントブランチへmerge
-        let merge_result = if let Some(eid) = &epic_id {
-            let target = implement::epic_branch_name(eid);
-            implement::merge_into_branch(&repo_dir, &job.branch, &target).await
-        } else {
-            implement::merge_branch(&repo_dir, &job.branch).await
+        // epicコンテキストならepicブランチへ、そうでなければmasterへmerge
+        let target = match &epic_id {
+            Some(eid) => implement::epic_branch_name(eid),
+            None => "master".to_string(),
         };
+        let merge_result =
+            implement::merge_into_branch(&repo_dir, &job.branch, &target).await;
 
         if let Err(e) = merge_result {
             self.notify(format!("Merge failed: {e}"));
