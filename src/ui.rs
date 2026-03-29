@@ -4,18 +4,18 @@ use chrono::{DateTime, FixedOffset};
 
 use crate::app::{App, View};
 use crate::bd::Issue;
-use crate::child_detail;
-use crate::epic_detail;
-use crate::implement::ImplStatus;
-use crate::issue_detail;
-use crate::issue_list;
+use crate::ai_implement::ImplStatus;
+use crate::page_child_detail;
+use crate::page_epic_detail;
+use crate::page_issue_detail;
+use crate::page_issue_list;
 
 pub fn draw(frame: &mut Frame, app: &App) {
     match &app.view {
-        View::IssueList => issue_list::ui::draw(frame, app),
-        View::IssueDetail { .. } => issue_detail::ui::draw(frame, app),
-        View::EpicDetail { .. } => epic_detail::ui::draw(frame, app),
-        View::ChildDetail { .. } => child_detail::ui::draw(frame, app),
+        View::IssueList => page_issue_list::ui::draw(frame, app),
+        View::IssueDetail { .. } => page_issue_detail::ui::draw(frame, app),
+        View::EpicDetail { .. } => page_epic_detail::ui::draw(frame, app),
+        View::ChildDetail { .. } => page_child_detail::ui::draw(frame, app),
     }
 }
 

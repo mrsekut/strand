@@ -7,7 +7,7 @@ use ratatui::{
 
 use crate::app::{App, ConfirmAction, InputMode, View};
 use crate::bd;
-use crate::implement::ImplStatus;
+use crate::ai_implement::ImplStatus;
 use crate::ui::{
     draw_notification, format_timestamp, padded_keybar_line, priority_style, status_style,
 };

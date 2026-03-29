@@ -6,24 +6,22 @@ use ratatui::{
 use chrono::{DateTime, FixedOffset};
 
 use crate::app::{App, ConfirmAction, InputMode, View};
-use crate::implement::ImplStatus;
+use crate::ai_implement::ImplStatus;
 use crate::ui::{
     draw_notification, format_timestamp, keybar_line, padded_keybar_line, priority_style,
     status_style,
 };
 
 pub fn draw(frame: &mut Frame, app: &App) {
-    let (issue_id, children, scroll_offset, detail_diff) = match &app.view {
-        View::ChildDetail {
+    let (issue_id, scroll_offset, detail_diff) = match &app.view {
+        View::IssueDetail {
             issue_id,
-            children,
             scroll_offset,
             diff,
-            ..
-        } => (issue_id, children, *scroll_offset, diff),
+        } => (issue_id, *scroll_offset, diff),
         _ => return,
     };
-    let issue = match children.iter().find(|i| i.id == *issue_id) {
+    let issue = match app.issues.iter().find(|i| i.id == *issue_id) {
         Some(i) => i,
         None => return,
     };
@@ -110,7 +108,6 @@ pub fn draw(frame: &mut Frame, app: &App) {
 
         lines.push(Line::from(impl_spans));
 
-        // Impl-related keys
         let mut impl_keys: Vec<(&str, &str)> = vec![("p", "copy path")];
         if matches!(job.status, ImplStatus::Done) {
             impl_keys.push(("m", "merge"));
@@ -148,7 +145,12 @@ pub fn draw(frame: &mut Frame, app: &App) {
 
 fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
     let keys: Vec<(&str, &str)> = match app.input_mode {
-        InputMode::AwaitingAI => vec![("e", "enrich"), ("i", "implement"), ("Esc", "cancel")],
+        InputMode::AwaitingAI => vec![
+            ("e", "enrich"),
+            ("i", "implement"),
+            ("s", "split"),
+            ("Esc", "cancel"),
+        ],
         InputMode::AwaitingConfirm(action) => {
             let label = match action {
                 ConfirmAction::Close => "confirm close",

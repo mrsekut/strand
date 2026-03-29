@@ -7,9 +7,9 @@ use ratatui::prelude::*;
 use tokio::sync::mpsc;
 
 use crate::bd::{self, Issue};
-use crate::enrich::{self, EnrichManager, EnrichOutcome};
-use crate::implement::{self, ImplManager, ImplOutcome, ImplStatus};
-use crate::split::{self, SplitManager, SplitOutcome};
+use crate::ai_enrich::{self, EnrichManager, EnrichOutcome};
+use crate::ai_implement::{self, ImplManager, ImplOutcome, ImplStatus};
+use crate::ai_split::{self, SplitManager, SplitOutcome};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfirmAction {
@@ -59,11 +59,11 @@ pub struct App {
     pub view: View,
     pub dir: Option<String>,
     pub enrich_manager: EnrichManager,
-    pub enrich_rx: mpsc::Receiver<enrich::EnrichEvent>,
+    pub enrich_rx: mpsc::Receiver<ai_enrich::EnrichEvent>,
     pub impl_manager: ImplManager,
-    pub impl_rx: mpsc::Receiver<implement::ImplEvent>,
+    pub impl_rx: mpsc::Receiver<ai_implement::ImplEvent>,
     pub split_manager: SplitManager,
-    pub split_rx: mpsc::Receiver<split::SplitEvent>,
+    pub split_rx: mpsc::Receiver<ai_split::SplitEvent>,
     pub notification: Option<(String, Instant)>,
     pub last_db_mtime: Option<SystemTime>,
     pub input_mode: InputMode,
@@ -323,7 +323,7 @@ impl App {
 
         // epicコンテキストな���epicブランチとの差分を表示
         let base = match &self.view {
-            View::ChildDetail { epic_id, .. } => implement::epic_branch_name(epic_id),
+            View::ChildDetail { epic_id, .. } => ai_implement::epic_branch_name(epic_id),
             _ => "master".to_string(),
         };
         let range = format!("{base}..{branch}");
@@ -415,7 +415,7 @@ impl App {
             .auto_enrich(&self.issues, self.dir.clone());
     }
 
-    pub async fn handle_enrich_event(&mut self, event: enrich::EnrichEvent) {
+    pub async fn handle_enrich_event(&mut self, event: ai_enrich::EnrichEvent) {
         let outcome = self.enrich_manager.handle_event(event);
         match outcome {
             EnrichOutcome::Started { issue_id } => {
@@ -440,7 +440,7 @@ impl App {
         self.split_manager.start(&issue, self.dir.clone());
     }
 
-    pub async fn handle_split_event(&mut self, event: split::SplitEvent) {
+    pub async fn handle_split_event(&mut self, event: ai_split::SplitEvent) {
         let outcome = self.split_manager.handle_event(event);
         match outcome {
             SplitOutcome::Started { issue_id } => {
@@ -511,7 +511,7 @@ impl App {
         }
     }
 
-    pub fn handle_impl_event(&mut self, event: implement::ImplEvent) {
+    pub fn handle_impl_event(&mut self, event: ai_implement::ImplEvent) {
         let dir = self.repo_dir().to_string_lossy().to_string();
         let outcome = self.impl_manager.handle_event(event, &dir);
         match outcome {
