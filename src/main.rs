@@ -1,6 +1,7 @@
 mod app;
 mod bd;
 mod child_detail;
+mod editor;
 mod enrich;
 mod epic_detail;
 mod implement;

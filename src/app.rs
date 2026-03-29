@@ -1,13 +1,8 @@
 use std::collections::HashSet;
-use std::io::stdout;
 use std::path::PathBuf;
 use std::time::{Instant, SystemTime};
 
 use anyhow::Result;
-use crossterm::ExecutableCommand;
-use crossterm::terminal::{
-    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
-};
 use ratatui::prelude::*;
 use tokio::sync::mpsc;
 
@@ -666,78 +661,41 @@ impl App {
             _ => self.current_issue(),
         };
         let Some(issue) = issue else { return };
-        let (issue_id, current_title, current_desc) = (
-            issue.id.clone(),
-            issue.title.clone(),
-            issue.description.clone().unwrap_or_default(),
-        );
+        let current_desc = issue.description.as_deref().unwrap_or_default();
 
-        let content = format!("{}\n\n{}", current_title, current_desc);
-        let tmp = std::env::temp_dir().join(format!("strand-{issue_id}.md"));
-        if std::fs::write(&tmp, &content).is_err() {
-            self.notify("Failed to create temp file");
-            return;
-        }
+        let result = crate::editor::open_editor(terminal, &issue.id, &issue.title, current_desc);
 
-        let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".into());
-        disable_raw_mode().ok();
-        stdout().execute(LeaveAlternateScreen).ok();
-        terminal.show_cursor().ok();
-
-        let status = std::process::Command::new(&editor).arg(&tmp).status();
-
-        stdout().execute(EnterAlternateScreen).ok();
-        enable_raw_mode().ok();
-        terminal.clear().ok();
-
-        match status {
-            Ok(s) if s.success() => {
-                if let Ok(new_content) = std::fs::read_to_string(&tmp) {
-                    let new_title = new_content.lines().next().unwrap_or("").trim().to_string();
-                    let new_desc = new_content
-                        .lines()
-                        .skip(1)
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                        .trim()
-                        .to_string();
-
-                    let title_changed = new_title != current_title.trim();
-                    let desc_changed = new_desc != current_desc.trim();
-
-                    if title_changed || desc_changed {
-                        let mut ok = true;
-                        if title_changed {
-                            if let Err(e) =
-                                bd::update_title(self.dir.as_deref(), &issue_id, &new_title).await
-                            {
-                                self.notify(format!("Title update failed: {e}"));
-                                ok = false;
-                            }
-                        }
-                        if desc_changed {
-                            if let Err(e) =
-                                bd::update_description(self.dir.as_deref(), &issue_id, &new_desc)
-                                    .await
-                            {
-                                self.notify(format!("Description update failed: {e}"));
-                                ok = false;
-                            }
-                        }
-                        if ok {
-                            self.notify(format!("Updated: {issue_id}"));
-                            let _ = self.load_issues().await;
-                            self.reload_children().await;
-                        }
+        match result {
+            Ok(Some(edit)) => {
+                let mut ok = true;
+                if edit.title_changed {
+                    if let Err(e) =
+                        bd::update_title(self.dir.as_deref(), &edit.issue_id, &edit.new_title).await
+                    {
+                        self.notify(format!("Title update failed: {e}"));
+                        ok = false;
                     }
                 }
+                if edit.desc_changed {
+                    if let Err(e) =
+                        bd::update_description(self.dir.as_deref(), &edit.issue_id, &edit.new_desc)
+                            .await
+                    {
+                        self.notify(format!("Description update failed: {e}"));
+                        ok = false;
+                    }
+                }
+                if ok {
+                    self.notify(format!("Updated: {}", edit.issue_id));
+                    let _ = self.load_issues().await;
+                    self.reload_children().await;
+                }
             }
-            _ => {
-                self.notify("Editor exited with error");
+            Ok(None) => {} // no changes
+            Err(e) => {
+                self.notify(format!("{e}"));
             }
         }
-
-        let _ = std::fs::remove_file(&tmp);
     }
 
     // --- Merge Epic ---
