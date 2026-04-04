@@ -44,6 +44,7 @@ pub async fn handle_key(
                         app.back();
                     }
                     ConfirmAction::Discard => app.discard_impl().await,
+                    ConfirmAction::Retry => app.retry_impl().await,
                     _ => {}
                 }
             }
@@ -68,6 +69,10 @@ pub async fn handle_key(
         KeyCode::Char('d') => {
             app.input_mode = InputMode::AwaitingConfirm(ConfirmAction::Discard);
             app.notification = Some(("Discard? (y/n)".into(), std::time::Instant::now()));
+        }
+        KeyCode::Char('r') => {
+            app.input_mode = InputMode::AwaitingConfirm(ConfirmAction::Retry);
+            app.notification = Some(("Retry? (y/n)".into(), std::time::Instant::now()));
         }
         KeyCode::Char('a') => {
             app.input_mode = InputMode::AwaitingAI;

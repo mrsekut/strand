@@ -106,6 +106,11 @@ pub fn draw(frame: &mut Frame, app: &App) {
                 Span::styled(&job.branch, Style::default().fg(Color::Red)),
                 Span::styled(format!("  {e}"), Style::default().fg(Color::Red)),
             ],
+            ImplStatus::Interrupted => vec![
+                Span::styled("⚠ ", Style::default().fg(Color::Yellow)),
+                Span::styled(&job.branch, Style::default().fg(Color::Yellow)),
+                Span::styled("  interrupted", Style::default().fg(Color::Yellow)),
+            ],
         };
 
         if is_stale {
@@ -117,9 +122,17 @@ pub fn draw(frame: &mut Frame, app: &App) {
 
         lines.push(Line::from(impl_spans));
 
-        if matches!(job.status, ImplStatus::Done) {
-            let impl_keys: Vec<(&str, &str)> = vec![("m", "merge"), ("d", "discard")];
-            lines.push(keybar_line(&impl_keys));
+        let mut impl_keys: Vec<(&str, &str)> = vec![];
+        match &job.status {
+            ImplStatus::Done => {
+                impl_keys.push(("m", "merge"));
+                impl_keys.push(("d", "discard"));
+            }
+            ImplStatus::Interrupted | ImplStatus::Failed(_) => {
+                impl_keys.push(("d", "discard"));
+                impl_keys.push(("r", "retry"));
+            }
+            _ => {}
         }
         lines.push(Line::from(""));
     }
