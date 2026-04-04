@@ -186,13 +186,19 @@ fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
         InputMode::AwaitingConfirm(action) => {
             vec![("y", action.label()), ("n", "cancel")]
         }
-        _ => vec![
-            ("Esc", "back"),
-            ("y", "yank"),
-            ("e", "edit"),
-            ("a", "ai"),
-            ("x", "close"),
-        ],
+        _ => {
+            let mut keys = vec![
+                ("Esc", "back"),
+                ("y", "yank"),
+                ("e", "edit"),
+                ("a", "ai"),
+                ("x", "close"),
+            ];
+            if app.impl_job_is_done() {
+                keys.push(("r", "rebase"));
+            }
+            keys
+        }
     };
 
     let line = padded_keybar_line(&keys);

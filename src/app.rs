@@ -272,6 +272,7 @@ impl App {
     }
 
     async fn load_issue_detail_diff(&mut self, issue_id: &str) {
+        self.rebase_impl(issue_id).await;
         let computed = self.compute_diff(issue_id).await;
         match &mut self.view {
             View::IssueDetail { diff, .. } => {
@@ -279,6 +280,32 @@ impl App {
             }
             _ => {}
         }
+    }
+
+    /// impl branchをターゲットブランチにrebaseする
+    pub async fn rebase_impl(&mut self, issue_id: &str) {
+        let Some(job) = self.impl_manager.get_job(issue_id) else {
+            return;
+        };
+        if !matches!(job.status, ImplStatus::Done) {
+            return;
+        }
+        let wt_path = job.worktree_path.clone();
+        let base = self.target_branch_for(issue_id);
+
+        match ai_implement::worktree::rebase_impl_branch(&wt_path, &base).await {
+            Ok(_) => {}
+            Err(e) => {
+                self.notify(format!("Rebase failed (retry recommended): {e}"));
+            }
+        }
+    }
+
+    /// issue_idに対するターゲットブランチ（master or epic branch）を返す
+    fn target_branch_for(&self, _issue_id: &str) -> String {
+        self.find_parent_epic_id()
+            .map(|eid| ai_implement::epic_branch_name(&eid))
+            .unwrap_or_else(|| "master".to_string())
     }
 
     async fn compute_diff(&self, issue_id: &str) -> Option<Vec<u8>> {
@@ -292,11 +319,7 @@ impl App {
         let branch = job.branch.clone();
         let repo_dir = self.repo_dir();
 
-        // epicコンテキストならepicブランチとの差分を表示
-        let base = self
-            .find_parent_epic_id()
-            .map(|eid| ai_implement::epic_branch_name(&eid))
-            .unwrap_or_else(|| "master".to_string());
+        let base = self.target_branch_for(issue_id);
         let range = format!("{base}..{branch}");
 
         let output = tokio::process::Command::new("sh")
@@ -573,6 +596,32 @@ impl App {
         }
 
         self.start_implement().await;
+    }
+
+    /// 現在のissueのimpl jobがDoneかどうか
+    pub fn impl_job_is_done(&self) -> bool {
+        let Some(issue_id) = self.current_issue_id() else {
+            return false;
+        };
+        matches!(
+            self.impl_manager.get_job(&issue_id),
+            Some(job) if matches!(job.status, ImplStatus::Done)
+        )
+    }
+
+    /// 手動rebase + diff再計算
+    pub async fn rebase_and_refresh_diff(&mut self) {
+        let Some(issue_id) = self.current_issue_id() else {
+            return;
+        };
+        self.rebase_impl(&issue_id).await;
+        let computed = self.compute_diff(&issue_id).await;
+        match &mut self.view {
+            View::IssueDetail { diff, .. } => {
+                *diff = computed;
+            }
+            _ => {}
+        }
     }
 
     // --- Close Issue ---

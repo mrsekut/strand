@@ -189,6 +189,30 @@ async fn has_commits(repo_dir: &Path, branch: &str, base_branch: &str) -> bool {
     }
 }
 
+/// impl branchをtarget branchにrebaseする。失敗時は--abortしてErrを返す。
+pub async fn rebase_impl_branch(worktree_path: &Path, target_branch: &str) -> Result<()> {
+    let output = Command::new("git")
+        .args(["rebase", target_branch])
+        .current_dir(worktree_path)
+        .output()
+        .await?;
+
+    if !output.status.success() {
+        // rebase失敗 → abort
+        let _ = Command::new("git")
+            .args(["rebase", "--abort"])
+            .current_dir(worktree_path)
+            .output()
+            .await;
+        anyhow::bail!(
+            "rebase failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+
+    Ok(())
+}
+
 pub async fn run_git(repo_dir: &Path, args: &[&str]) -> Result<()> {
     let output = Command::new("git")
         .args(args)

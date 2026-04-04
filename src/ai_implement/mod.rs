@@ -1,7 +1,7 @@
 mod manager;
 mod merge;
 mod run;
-mod worktree;
+pub mod worktree;
 
 pub use manager::{ImplManager, ImplOutcome};
 pub use run::ImplEvent;
