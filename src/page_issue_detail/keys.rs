@@ -31,15 +31,26 @@ pub async fn handle_key(
             }
             return;
         }
+        InputMode::AwaitingStatus => {
+            app.input_mode = InputMode::Normal;
+            app.notification = None;
+            match key {
+                KeyCode::Char('o') => app.set_status("open").await,
+                KeyCode::Char('p') => app.set_status("in_progress").await,
+                KeyCode::Char('d') => app.set_status("deferred").await,
+                KeyCode::Char('c') => {
+                    app.set_status("closed").await;
+                    app.back();
+                }
+                _ => {}
+            }
+            return;
+        }
         InputMode::AwaitingConfirm(action) => {
             app.input_mode = InputMode::Normal;
             app.notification = None;
             if let KeyCode::Char('y') = key {
                 match action {
-                    ConfirmAction::Close => {
-                        app.close_issue().await;
-                        app.back();
-                    }
                     ConfirmAction::Merge => {
                         app.merge_impl().await;
                         app.back();
@@ -79,9 +90,9 @@ pub async fn handle_key(
             app.input_mode = InputMode::AwaitingAI;
             app.notification = Some(("a-...".into(), std::time::Instant::now()));
         }
-        KeyCode::Char('x') => {
-            app.input_mode = InputMode::AwaitingConfirm(ConfirmAction::Close);
-            app.notification = Some(("Close? (y/n)".into(), std::time::Instant::now()));
+        KeyCode::Char('s') => {
+            app.input_mode = InputMode::AwaitingStatus;
+            app.notification = Some(("s-...".into(), std::time::Instant::now()));
         }
         KeyCode::Char('q') => app.quick_create_with_editor(terminal).await,
         _ => {}

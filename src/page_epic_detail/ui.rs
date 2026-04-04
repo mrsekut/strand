@@ -176,6 +176,13 @@ fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
             yank_keys.push(("Esc", "cancel"));
             yank_keys
         }
+        InputMode::AwaitingStatus => vec![
+            ("o", "open"),
+            ("p", "in_progress"),
+            ("d", "deferred"),
+            ("c", "closed"),
+            ("Esc", "cancel"),
+        ],
         InputMode::AwaitingConfirm(action) => {
             vec![("y", action.label()), ("n", "cancel")]
         }
@@ -187,7 +194,7 @@ fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
                 ("y", "yank"),
                 ("e", "edit"),
                 ("a", "ai"),
-                ("x", "close"),
+                ("s", "status"),
             ];
             if app.all_children_closed() {
                 keys.push(("m", "merge to master"));

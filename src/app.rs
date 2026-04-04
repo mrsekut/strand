@@ -13,7 +13,6 @@ use crate::bd::{self, Issue};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfirmAction {
-    Close,
     Merge,
     Discard,
     MergeEpic,
@@ -23,7 +22,6 @@ pub enum ConfirmAction {
 impl ConfirmAction {
     pub fn label(&self) -> &'static str {
         match self {
-            ConfirmAction::Close => "confirm close",
             ConfirmAction::Merge => "confirm merge",
             ConfirmAction::Discard => "confirm discard",
             ConfirmAction::MergeEpic => "confirm merge epic to master",
@@ -38,6 +36,7 @@ pub enum InputMode {
     AwaitingAI,
     AwaitingYank,
     AwaitingPriority,
+    AwaitingStatus,
     AwaitingConfirm(ConfirmAction),
 }
 
@@ -598,24 +597,37 @@ impl App {
         self.start_implement().await;
     }
 
-    // --- Close Issue ---
+    // --- Set Status ---
 
-    pub async fn close_issue(&mut self) {
+    pub async fn set_status(&mut self, status: &str) {
         let Some(issue_id) = self.current_issue_id() else {
             return;
         };
 
-        match bd::close_issue(self.dir.as_deref(), &issue_id).await {
-            Ok(_) => {
-                self.notify(format!("Closed: {issue_id}"));
-                let _ = self.load_issues().await;
-                self.reload_children().await;
-                if self.selected >= self.issues.len() && self.selected > 0 {
-                    self.selected -= 1;
+        if status == "closed" {
+            match bd::close_issue(self.dir.as_deref(), &issue_id).await {
+                Ok(_) => {
+                    self.notify(format!("Closed: {issue_id}"));
+                    let _ = self.load_issues().await;
+                    self.reload_children().await;
+                    if self.selected >= self.issues.len() && self.selected > 0 {
+                        self.selected -= 1;
+                    }
+                }
+                Err(e) => {
+                    self.notify(format!("Status change failed: {e}"));
                 }
             }
-            Err(e) => {
-                self.notify(format!("Close failed: {e}"));
+        } else {
+            match bd::update_status(self.dir.as_deref(), &issue_id, status).await {
+                Ok(_) => {
+                    self.notify(format!("Status: {issue_id} → {status}"));
+                    let _ = self.load_issues().await;
+                    self.reload_children().await;
+                }
+                Err(e) => {
+                    self.notify(format!("Status change failed: {e}"));
+                }
             }
         }
     }

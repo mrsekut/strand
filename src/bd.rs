@@ -150,6 +150,11 @@ pub async fn close_issue(dir: Option<&str>, id: &str) -> Result<()> {
     Ok(())
 }
 
+pub async fn update_status(dir: Option<&str>, id: &str, status: &str) -> Result<()> {
+    run_bd(dir, ["update", id, "--status", status].as_slice()).await?;
+    Ok(())
+}
+
 pub async fn append_to_description(dir: Option<&str>, id: &str, content: &str) -> Result<()> {
     let issue = get_issue(dir, id).await?;
     let current = issue.description.unwrap_or_default();
