@@ -7,6 +7,49 @@ use crossterm::terminal::{
 };
 use ratatui::prelude::*;
 
+/// エディタで新規作成された結果
+pub struct CreateResult {
+    pub title: String,
+}
+
+/// エディタを起動してissueのタイトルを入力させる（quick create用）。
+/// TUI退避/復帰を含む。タイトルが入力されればCreateResultを返す。
+pub fn open_editor_for_create(
+    terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+) -> Result<Option<CreateResult>> {
+    let tmp = std::env::temp_dir().join("strand-new-issue.md");
+    std::fs::write(&tmp, "")?;
+
+    let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".into());
+    disable_raw_mode().ok();
+    stdout().execute(LeaveAlternateScreen).ok();
+    terminal.show_cursor().ok();
+
+    let status = std::process::Command::new(&editor).arg(&tmp).status();
+
+    stdout().execute(EnterAlternateScreen).ok();
+    enable_raw_mode().ok();
+    terminal.clear().ok();
+
+    let result = match status {
+        Ok(s) if s.success() => {
+            let content = std::fs::read_to_string(&tmp)?;
+            let title = content.lines().next().unwrap_or("").trim().to_string();
+            if title.is_empty() {
+                None
+            } else {
+                Some(CreateResult { title })
+            }
+        }
+        _ => {
+            anyhow::bail!("Editor exited with error");
+        }
+    };
+
+    let _ = std::fs::remove_file(&tmp);
+    Ok(result)
+}
+
 /// エディタで編集された結果
 pub struct EditResult {
     pub issue_id: String,

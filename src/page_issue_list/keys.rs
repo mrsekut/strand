@@ -1,8 +1,13 @@
 use crossterm::event::KeyCode;
+use ratatui::prelude::*;
 
 use crate::app::{App, ConfirmAction, InputMode};
 
-pub async fn handle_key(key: KeyCode, app: &mut App) {
+pub async fn handle_key(
+    key: KeyCode,
+    app: &mut App,
+    terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+) {
     match app.input_mode {
         InputMode::AwaitingAI => {
             app.input_mode = InputMode::Normal;
@@ -63,6 +68,7 @@ pub async fn handle_key(key: KeyCode, app: &mut App) {
                 app.input_mode = InputMode::AwaitingPriority;
                 app.notification = Some(("p-...".into(), std::time::Instant::now()));
             }
+            KeyCode::Char('q') => app.quick_create_with_editor(terminal).await,
             _ => {}
         },
     }

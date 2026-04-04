@@ -70,6 +70,7 @@ fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
         }
         InputMode::Normal => vec![
             ("Enter", "detail"),
+            ("q", "create"),
             ("y", "yank"),
             ("p", "priority"),
             ("a", "ai"),

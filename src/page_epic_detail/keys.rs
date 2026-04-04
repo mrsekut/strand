@@ -70,6 +70,7 @@ pub async fn handle_key(
             app.input_mode = InputMode::AwaitingConfirm(ConfirmAction::Close);
             app.notification = Some(("Close? (y/n)".into(), std::time::Instant::now()));
         }
+        KeyCode::Char('q') => app.quick_create_with_editor(terminal).await,
         _ => {}
     }
 }

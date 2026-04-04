@@ -82,7 +82,7 @@ async fn run(
                             break;
                         }
                         match &app.view {
-                            View::IssueList => page_issue_list::keys::handle_key(key.code, app).await,
+                            View::IssueList => page_issue_list::keys::handle_key(key.code, app, terminal).await,
                             View::IssueDetail { .. } => page_issue_detail::keys::handle_key(key.code, app, terminal).await,
                             View::EpicDetail { .. } => page_epic_detail::keys::handle_key(key.code, app, terminal).await,
                         }

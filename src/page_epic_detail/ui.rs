@@ -183,6 +183,7 @@ fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
             let mut keys = vec![
                 ("Enter", "open issue"),
                 ("Esc", "back"),
+                ("q", "create"),
                 ("y", "yank"),
                 ("e", "edit"),
                 ("a", "ai"),

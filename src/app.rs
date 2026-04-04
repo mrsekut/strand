@@ -712,6 +712,34 @@ impl App {
         }
     }
 
+    // --- Quick Create ---
+
+    pub async fn quick_create_with_editor(
+        &mut self,
+        terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+    ) {
+        let result = crate::editor::open_editor_for_create(terminal);
+
+        match result {
+            Ok(Some(create)) => {
+                match bd::quick_create(self.dir.as_deref(), &create.title).await {
+                    Ok(id) => {
+                        self.notify(format!("Created: {id}"));
+                        let _ = self.load_issues().await;
+                        self.auto_enrich();
+                    }
+                    Err(e) => {
+                        self.notify(format!("Create failed: {e}"));
+                    }
+                }
+            }
+            Ok(None) => {} // empty title or no changes
+            Err(e) => {
+                self.notify(format!("{e}"));
+            }
+        }
+    }
+
     // --- Edit Description ---
 
     pub async fn edit_description(
