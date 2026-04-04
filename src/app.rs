@@ -676,7 +676,26 @@ impl App {
             return;
         };
         let path = job.worktree_path.display();
-        let cmd = format!("cd {} && claude --dangerously-skip-permissions --resume {}", path, session_id);
+        let cmd = format!(
+            "cd {} && claude --dangerously-skip-permissions --resume {}",
+            path, session_id
+        );
+        match crate::clipboard::copy(&cmd) {
+            Ok(_) => self.notify(format!("Copied: {cmd}")),
+            Err(e) => self.notify(format!("Copy failed: {e}")),
+        }
+    }
+
+    pub fn copy_log_command(&mut self) {
+        let Some(issue_id) = self.current_issue_id() else {
+            return;
+        };
+        let Some(job) = self.impl_manager.get_job(&issue_id) else {
+            self.notify("No impl job found");
+            return;
+        };
+        let log_path = crate::ai_implement::run::log_file_path(&job.worktree_path);
+        let cmd = format!("tail -f {} | jq .", log_path.display());
         match crate::clipboard::copy(&cmd) {
             Ok(_) => self.notify(format!("Copied: {cmd}")),
             Err(e) => self.notify(format!("Copy failed: {e}")),
@@ -707,18 +726,16 @@ impl App {
         let result = crate::editor::open_editor_for_create(terminal);
 
         match result {
-            Ok(Some(create)) => {
-                match bd::quick_create(self.dir.as_deref(), &create.title).await {
-                    Ok(id) => {
-                        self.notify(format!("Created: {id}"));
-                        let _ = self.load_issues().await;
-                        self.auto_enrich();
-                    }
-                    Err(e) => {
-                        self.notify(format!("Create failed: {e}"));
-                    }
+            Ok(Some(create)) => match bd::quick_create(self.dir.as_deref(), &create.title).await {
+                Ok(id) => {
+                    self.notify(format!("Created: {id}"));
+                    let _ = self.load_issues().await;
+                    self.auto_enrich();
                 }
-            }
+                Err(e) => {
+                    self.notify(format!("Create failed: {e}"));
+                }
+            },
             Ok(None) => {} // empty title or no changes
             Err(e) => {
                 self.notify(format!("{e}"));

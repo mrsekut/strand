@@ -182,6 +182,7 @@ fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
                     if job.session_id.is_some() {
                         yank_keys.push(("r", "resume"));
                     }
+                    yank_keys.push(("l", "log"));
                 }
             }
             yank_keys.push(("Esc", "cancel"));
