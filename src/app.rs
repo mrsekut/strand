@@ -598,32 +598,6 @@ impl App {
         self.start_implement().await;
     }
 
-    /// 現在のissueのimpl jobがDoneかどうか
-    pub fn impl_job_is_done(&self) -> bool {
-        let Some(issue_id) = self.current_issue_id() else {
-            return false;
-        };
-        matches!(
-            self.impl_manager.get_job(&issue_id),
-            Some(job) if matches!(job.status, ImplStatus::Done)
-        )
-    }
-
-    /// 手動rebase + diff再計算
-    pub async fn rebase_and_refresh_diff(&mut self) {
-        let Some(issue_id) = self.current_issue_id() else {
-            return;
-        };
-        self.rebase_impl(&issue_id).await;
-        let computed = self.compute_diff(&issue_id).await;
-        match &mut self.view {
-            View::IssueDetail { diff, .. } => {
-                *diff = computed;
-            }
-            _ => {}
-        }
-    }
-
     // --- Close Issue ---
 
     pub async fn close_issue(&mut self) {
