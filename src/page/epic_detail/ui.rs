@@ -5,7 +5,7 @@ use ratatui::{
     widgets::{Cell, Paragraph, Row, Table, TableState, Wrap},
 };
 
-use crate::ai_implement::ImplStatus;
+use crate::ai::implement::ImplStatus;
 use crate::app::{App, InputMode, View};
 use crate::bd;
 use crate::ui::{

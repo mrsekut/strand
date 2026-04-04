@@ -2,18 +2,16 @@ use ratatui::{prelude::*, widgets::Paragraph};
 
 use chrono::{DateTime, FixedOffset};
 
-use crate::ai_implement::ImplStatus;
+use crate::ai::implement::ImplStatus;
 use crate::app::{App, View};
 use crate::bd::Issue;
-use crate::page_epic_detail;
-use crate::page_issue_detail;
-use crate::page_issue_list;
+use crate::page;
 
 pub fn draw(frame: &mut Frame, app: &App) {
     match &app.view {
-        View::IssueList => page_issue_list::ui::draw(frame, app),
-        View::IssueDetail { .. } => page_issue_detail::ui::draw(frame, app),
-        View::EpicDetail { .. } => page_epic_detail::ui::draw(frame, app),
+        View::IssueList => page::issue_list::ui::draw(frame, app),
+        View::IssueDetail { .. } => page::issue_detail::ui::draw(frame, app),
+        View::EpicDetail { .. } => page::epic_detail::ui::draw(frame, app),
     }
 }
 

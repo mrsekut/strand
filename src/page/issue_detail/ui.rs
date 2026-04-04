@@ -5,7 +5,7 @@ use ratatui::{
 
 use chrono::{DateTime, FixedOffset};
 
-use crate::ai_implement::ImplStatus;
+use crate::ai::implement::ImplStatus;
 use crate::app::{App, InputMode, View};
 use crate::ui::{
     draw_notification, format_timestamp, keybar_line, padded_keybar_line, priority_style,

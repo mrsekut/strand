@@ -6,9 +6,9 @@ use anyhow::Result;
 use ratatui::prelude::*;
 use tokio::sync::mpsc;
 
-use crate::ai_enrich::{self, EnrichManager, EnrichOutcome};
-use crate::ai_implement::{self, ImplManager, ImplOutcome, ImplStatus};
-use crate::ai_split::{self, SplitManager, SplitOutcome};
+use crate::ai::enrich::{self, EnrichManager, EnrichOutcome};
+use crate::ai::implement::{self, ImplManager, ImplOutcome, ImplStatus};
+use crate::ai::split::{self, SplitManager, SplitOutcome};
 use crate::bd::{self, Issue};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,11 +64,11 @@ pub struct App {
     pub view_stack: Vec<View>,
     pub dir: Option<String>,
     pub enrich_manager: EnrichManager,
-    pub enrich_rx: mpsc::Receiver<ai_enrich::EnrichEvent>,
+    pub enrich_rx: mpsc::Receiver<enrich::EnrichEvent>,
     pub impl_manager: ImplManager,
-    pub impl_rx: mpsc::Receiver<ai_implement::ImplEvent>,
+    pub impl_rx: mpsc::Receiver<implement::ImplEvent>,
     pub split_manager: SplitManager,
-    pub split_rx: mpsc::Receiver<ai_split::SplitEvent>,
+    pub split_rx: mpsc::Receiver<split::SplitEvent>,
     pub notification: Option<(String, Instant)>,
     pub last_db_mtime: Option<SystemTime>,
     pub input_mode: InputMode,
@@ -292,7 +292,7 @@ impl App {
         let wt_path = job.worktree_path.clone();
         let base = self.target_branch_for(issue_id);
 
-        match ai_implement::worktree::rebase_impl_branch(&wt_path, &base).await {
+        match implement::worktree::rebase_impl_branch(&wt_path, &base).await {
             Ok(_) => {}
             Err(e) => {
                 self.notify(format!("Rebase failed (retry recommended): {e}"));
@@ -303,7 +303,7 @@ impl App {
     /// issue_idに対するターゲットブランチ（master or epic branch）を返す
     fn target_branch_for(&self, _issue_id: &str) -> String {
         self.find_parent_epic_id()
-            .map(|eid| ai_implement::epic_branch_name(&eid))
+            .map(|eid| implement::epic_branch_name(&eid))
             .unwrap_or_else(|| "master".to_string())
     }
 
@@ -431,7 +431,7 @@ impl App {
             .auto_enrich(&self.issues, self.dir.clone());
     }
 
-    pub async fn handle_enrich_event(&mut self, event: ai_enrich::EnrichEvent) {
+    pub async fn handle_enrich_event(&mut self, event: enrich::EnrichEvent) {
         let outcome = self.enrich_manager.handle_event(event);
         match outcome {
             EnrichOutcome::Started { issue_id } => {
@@ -456,7 +456,7 @@ impl App {
         self.split_manager.start(&issue, self.dir.clone());
     }
 
-    pub async fn handle_split_event(&mut self, event: ai_split::SplitEvent) {
+    pub async fn handle_split_event(&mut self, event: split::SplitEvent) {
         let outcome = self.split_manager.handle_event(event);
         match outcome {
             SplitOutcome::Started { issue_id } => {
@@ -525,7 +525,7 @@ impl App {
         }
     }
 
-    pub fn handle_impl_event(&mut self, event: ai_implement::ImplEvent) {
+    pub fn handle_impl_event(&mut self, event: implement::ImplEvent) {
         let dir = self.repo_dir().to_string_lossy().to_string();
         let outcome = self.impl_manager.handle_event(event, &dir);
         match outcome {
@@ -694,7 +694,7 @@ impl App {
             self.notify("No impl job found");
             return;
         };
-        let log_path = crate::ai_implement::run::log_file_path(&job.worktree_path);
+        let log_path = crate::ai::implement::run::log_file_path(&job.worktree_path);
         let cmd = format!("tail -f {} | jq .", log_path.display());
         match crate::clipboard::copy(&cmd) {
             Ok(_) => self.notify(format!("Copied: {cmd}")),

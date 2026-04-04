@@ -1,13 +1,9 @@
-mod ai_enrich;
-mod ai_implement;
-mod ai_split;
+mod ai;
 mod app;
 mod bd;
 mod clipboard;
 mod editor;
-mod page_epic_detail;
-mod page_issue_detail;
-mod page_issue_list;
+mod page;
 mod ui;
 
 use std::io::stdout;
@@ -82,9 +78,9 @@ async fn run(
                             break;
                         }
                         match &app.view {
-                            View::IssueList => page_issue_list::keys::handle_key(key.code, app, terminal).await,
-                            View::IssueDetail { .. } => page_issue_detail::keys::handle_key(key.code, app, terminal).await,
-                            View::EpicDetail { .. } => page_epic_detail::keys::handle_key(key.code, app, terminal).await,
+                            View::IssueList => page::issue_list::keys::handle_key(key.code, app, terminal).await,
+                            View::IssueDetail { .. } => page::issue_detail::keys::handle_key(key.code, app, terminal).await,
+                            View::EpicDetail { .. } => page::epic_detail::keys::handle_key(key.code, app, terminal).await,
                         }
                     }
                     Some(Ok(_)) => {}
