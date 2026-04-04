@@ -34,7 +34,6 @@ impl ConfirmAction {
 pub enum InputMode {
     Normal,
     AwaitingAI,
-    AwaitingYank,
     AwaitingPriority,
     AwaitingStatus,
     AwaitingConfirm(ConfirmAction),

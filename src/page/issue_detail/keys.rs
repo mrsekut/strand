@@ -20,15 +20,6 @@ pub async fn handle_key(
             }
             return;
         }
-        InputMode::AwaitingYank => {
-            app.input_mode = InputMode::Normal;
-            app.notification = None;
-            match key {
-                KeyCode::Char('i') => app.copy_id(),
-                _ => {}
-            }
-            return;
-        }
         InputMode::AwaitingStatus => {
             app.input_mode = InputMode::Normal;
             app.notification = None;
@@ -67,10 +58,7 @@ pub async fn handle_key(
         KeyCode::Esc => app.back(),
         KeyCode::Down => app.next(),
         KeyCode::Up => app.previous(),
-        KeyCode::Char('y') => {
-            app.input_mode = InputMode::AwaitingYank;
-            app.notification = Some(("y-...".into(), std::time::Instant::now()));
-        }
+        KeyCode::Char('y') => app.copy_id(),
         KeyCode::Char('e') => app.edit_description(terminal).await,
         KeyCode::Char('m') => {
             app.input_mode = InputMode::AwaitingConfirm(ConfirmAction::Merge);

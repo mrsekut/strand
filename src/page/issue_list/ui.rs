@@ -61,9 +61,6 @@ fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
             ("s", "split"),
             ("Esc", "cancel"),
         ],
-        InputMode::AwaitingYank => {
-            vec![("i", "copy id"), ("Esc", "cancel")]
-        }
         InputMode::AwaitingPriority => vec![("0-4", "priority"), ("Esc", "cancel")],
         InputMode::AwaitingStatus => vec![
             ("o", "open"),
@@ -78,7 +75,7 @@ fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
         InputMode::Normal => vec![
             ("Enter", "detail"),
             ("q", "create"),
-            ("y", "yank"),
+            ("y", "copy id"),
             ("p", "priority"),
             ("a", "ai"),
             ("s", "status"),

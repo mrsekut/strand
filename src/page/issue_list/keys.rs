@@ -19,14 +19,6 @@ pub async fn handle_key(
                 _ => {}
             }
         }
-        InputMode::AwaitingYank => {
-            app.input_mode = InputMode::Normal;
-            app.notification = None;
-            match key {
-                KeyCode::Char('i') => app.copy_id(),
-                _ => {}
-            }
-        }
         InputMode::AwaitingPriority => {
             app.input_mode = InputMode::Normal;
             app.notification = None;
@@ -61,10 +53,7 @@ pub async fn handle_key(
             KeyCode::Down | KeyCode::Char('j') => app.next(),
             KeyCode::Up | KeyCode::Char('k') => app.previous(),
             KeyCode::Enter => app.open_detail().await,
-            KeyCode::Char('y') => {
-                app.input_mode = InputMode::AwaitingYank;
-                app.notification = Some(("y-...".into(), std::time::Instant::now()));
-            }
+            KeyCode::Char('y') => app.copy_id(),
             KeyCode::Char('a') => {
                 app.input_mode = InputMode::AwaitingAI;
                 app.notification = Some(("a-...".into(), std::time::Instant::now()));
