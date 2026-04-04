@@ -52,6 +52,7 @@ pub fn epic_icon(app: &App, issue: &Issue) -> (&'static str, Style) {
             ImplStatus::Running => ("⚡", Style::default().fg(Color::Magenta)),
             ImplStatus::Done => ("✓", Style::default().fg(Color::Green)),
             ImplStatus::Failed(_) => ("✗", Style::default().fg(Color::Red)),
+            ImplStatus::Interrupted => ("⚠", Style::default().fg(Color::Yellow)),
         };
     }
     if app.enrich_manager.is_enriching(&issue.id) {

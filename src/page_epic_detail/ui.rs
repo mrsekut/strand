@@ -18,6 +18,7 @@ fn child_icon(app: &App, issue: &bd::Issue, ready_ids: &HashSet<String>) -> (&'s
             ImplStatus::Running => ("⚡", Style::default().fg(Color::Magenta)),
             ImplStatus::Done => ("✓", Style::default().fg(Color::Green)),
             ImplStatus::Failed(_) => ("✗", Style::default().fg(Color::Red)),
+            ImplStatus::Interrupted => ("⚠", Style::default().fg(Color::Yellow)),
         };
     }
     if issue.status == "closed" {

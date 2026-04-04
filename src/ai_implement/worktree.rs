@@ -116,7 +116,7 @@ pub async fn discover_worktrees(repo_dir: &Path, issue_ids: &[String]) -> Vec<Im
         let has = has_commits(repo_dir, &branch, &base_branch).await;
         let status = match has {
             true => ImplStatus::Done,
-            false => ImplStatus::Failed("interrupted".to_string()),
+            false => ImplStatus::Interrupted,
         };
 
         let completed_at = if has {

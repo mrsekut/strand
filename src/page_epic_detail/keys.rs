@@ -36,6 +36,7 @@ pub async fn handle_key(
                     ConfirmAction::Merge => app.merge_impl().await,
                     ConfirmAction::Discard => app.discard_impl().await,
                     ConfirmAction::MergeEpic => app.merge_epic().await,
+                    ConfirmAction::Retry => app.retry_impl().await,
                 }
             }
             return;

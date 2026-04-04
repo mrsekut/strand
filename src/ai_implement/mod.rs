@@ -13,6 +13,7 @@ pub enum ImplStatus {
     Running,
     Done,
     Failed(String),
+    Interrupted,
 }
 
 #[derive(Debug, Clone)]

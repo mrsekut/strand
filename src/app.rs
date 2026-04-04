@@ -17,6 +17,7 @@ pub enum ConfirmAction {
     Merge,
     Discard,
     MergeEpic,
+    Retry,
 }
 
 impl ConfirmAction {
@@ -26,6 +27,7 @@ impl ConfirmAction {
             ConfirmAction::Merge => "confirm merge",
             ConfirmAction::Discard => "confirm discard",
             ConfirmAction::MergeEpic => "confirm merge epic to master",
+            ConfirmAction::Retry => "confirm retry",
         }
     }
 }
@@ -557,6 +559,20 @@ impl App {
         }
 
         self.notify(format!("Discarded: {issue_id}"));
+    }
+
+    pub async fn retry_impl(&mut self) {
+        let Some(issue_id) = self.current_issue_id() else {
+            return;
+        };
+
+        let repo_dir = self.repo_dir();
+        if let Err(e) = self.impl_manager.discard(&issue_id, &repo_dir).await {
+            self.notify(format!("Retry failed (discard): {e}"));
+            return;
+        }
+
+        self.start_implement().await;
     }
 
     // --- Close Issue ---
