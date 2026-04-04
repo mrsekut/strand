@@ -62,7 +62,15 @@ fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
             ("Esc", "cancel"),
         ],
         InputMode::AwaitingYank => {
-            vec![("i", "copy id"), ("p", "copy path"), ("Esc", "cancel")]
+            // list画面では到達しない想定だが、フォールバックとしてNormalと同じ表示
+            vec![
+                ("Enter", "detail"),
+                ("q", "create"),
+                ("y", "yank id"),
+                ("p", "priority"),
+                ("a", "ai"),
+                ("x", "close"),
+            ]
         }
         InputMode::AwaitingPriority => vec![("0-4", "priority"), ("Esc", "cancel")],
         InputMode::AwaitingConfirm(action) => {
@@ -71,7 +79,7 @@ fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
         InputMode::Normal => vec![
             ("Enter", "detail"),
             ("q", "create"),
-            ("y", "yank"),
+            ("y", "yank id"),
             ("p", "priority"),
             ("a", "ai"),
             ("x", "close"),
