@@ -117,12 +117,10 @@ pub fn draw(frame: &mut Frame, app: &App) {
 
         lines.push(Line::from(impl_spans));
 
-        let mut impl_keys: Vec<(&str, &str)> = vec![("p", "copy path")];
         if matches!(job.status, ImplStatus::Done) {
-            impl_keys.push(("m", "merge"));
-            impl_keys.push(("d", "discard"));
+            let impl_keys: Vec<(&str, &str)> = vec![("m", "merge"), ("d", "discard")];
+            lines.push(keybar_line(&impl_keys));
         }
-        lines.push(keybar_line(&impl_keys));
         lines.push(Line::from(""));
     }
 
