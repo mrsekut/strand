@@ -135,6 +135,11 @@ pub fn draw(frame: &mut Frame, app: &App) {
             }
             _ => {}
         }
+        impl_keys.push(("p", "path"));
+        if job.session_id.is_some() {
+            impl_keys.push(("c", "continue"));
+        }
+        impl_keys.push(("l", "log"));
         if !impl_keys.is_empty() {
             lines.push(keybar_line(&impl_keys));
         }
@@ -176,17 +181,7 @@ fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
             ("Esc", "cancel"),
         ],
         InputMode::AwaitingYank => {
-            let mut yank_keys = vec![("i", "copy id"), ("p", "copy path")];
-            if let Some(issue_id) = app.current_issue_id() {
-                if let Some(job) = app.impl_manager.get_job(&issue_id) {
-                    if job.session_id.is_some() {
-                        yank_keys.push(("r", "resume"));
-                    }
-                    yank_keys.push(("l", "log"));
-                }
-            }
-            yank_keys.push(("Esc", "cancel"));
-            yank_keys
+            vec![("i", "copy id"), ("Esc", "cancel")]
         }
         InputMode::AwaitingStatus => vec![
             ("o", "open"),

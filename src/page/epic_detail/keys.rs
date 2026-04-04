@@ -22,8 +22,6 @@ pub async fn handle_key(
             app.notification = None;
             match key {
                 KeyCode::Char('i') => app.copy_id(),
-                KeyCode::Char('p') => app.copy_worktree_path(),
-                KeyCode::Char('r') => app.copy_resume_command(),
                 _ => {}
             }
             return;
@@ -81,6 +79,8 @@ pub async fn handle_key(
             app.input_mode = InputMode::AwaitingStatus;
             app.notification = Some(("s-...".into(), std::time::Instant::now()));
         }
+        KeyCode::Char('p') => app.copy_worktree_path(),
+        KeyCode::Char('c') => app.copy_resume_command(),
         KeyCode::Char('q') => app.quick_create_with_editor(terminal).await,
         _ => {}
     }

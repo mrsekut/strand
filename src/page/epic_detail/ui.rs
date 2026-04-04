@@ -165,16 +165,7 @@ fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
     let keys: Vec<(&str, &str)> = match app.input_mode {
         InputMode::AwaitingAI => vec![("e", "enrich"), ("Esc", "cancel")],
         InputMode::AwaitingYank => {
-            let mut yank_keys = vec![("i", "copy id"), ("p", "copy path")];
-            if let Some(issue_id) = app.current_issue_id() {
-                if let Some(job) = app.impl_manager.get_job(&issue_id) {
-                    if job.session_id.is_some() {
-                        yank_keys.push(("r", "resume"));
-                    }
-                }
-            }
-            yank_keys.push(("Esc", "cancel"));
-            yank_keys
+            vec![("i", "copy id"), ("Esc", "cancel")]
         }
         InputMode::AwaitingStatus => vec![
             ("o", "open"),
@@ -196,6 +187,14 @@ fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
                 ("a", "ai"),
                 ("s", "status"),
             ];
+            if let Some(issue_id) = app.current_issue_id() {
+                if let Some(job) = app.impl_manager.get_job(&issue_id) {
+                    keys.push(("p", "path"));
+                    if job.session_id.is_some() {
+                        keys.push(("c", "continue"));
+                    }
+                }
+            }
             if app.all_children_closed() {
                 keys.push(("m", "merge to master"));
             }
