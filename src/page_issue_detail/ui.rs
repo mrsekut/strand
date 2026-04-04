@@ -8,8 +8,7 @@ use chrono::{DateTime, FixedOffset};
 use crate::ai_implement::ImplStatus;
 use crate::app::{App, InputMode, View};
 use crate::ui::{
-    draw_notification, format_timestamp, keybar_line, padded_keybar_line, priority_style,
-    status_style,
+    draw_notification, format_timestamp, padded_keybar_line, priority_style, status_style,
 };
 
 pub fn draw(frame: &mut Frame, app: &App) {
@@ -127,12 +126,16 @@ pub fn draw(frame: &mut Frame, app: &App) {
             ImplStatus::Done => {
                 impl_keys.push(("m", "merge"));
                 impl_keys.push(("d", "discard"));
+                impl_keys.push(("r", "retry"));
             }
             ImplStatus::Interrupted | ImplStatus::Failed(_) => {
                 impl_keys.push(("d", "discard"));
                 impl_keys.push(("r", "retry"));
             }
             _ => {}
+        }
+        if !impl_keys.is_empty() {
+            lines.push(keybar_line(&impl_keys));
         }
         lines.push(Line::from(""));
     }
