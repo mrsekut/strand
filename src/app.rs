@@ -676,7 +676,7 @@ impl App {
             return;
         };
         let path = job.worktree_path.display();
-        let cmd = format!("cd {} && claude --resume {}", path, session_id);
+        let cmd = format!("cd {} && claude --dangerously-skip-permissions --resume {}", path, session_id);
         match crate::clipboard::copy(&cmd) {
             Ok(_) => self.notify(format!("Copied: {cmd}")),
             Err(e) => self.notify(format!("Copy failed: {e}")),
