@@ -125,16 +125,26 @@ pub async fn discover_worktrees(repo_dir: &Path, issue_ids: &[String]) -> Vec<Im
             None
         };
 
+        let session_id = read_session_id(&wt_path).await;
+
         jobs.push(ImplJob {
             issue_id,
             branch,
             worktree_path: wt_path,
             status,
             completed_at,
+            session_id,
         });
     }
 
     jobs
+}
+
+async fn read_session_id(wt_path: &Path) -> Option<String> {
+    let session_file = wt_path.join(".strand-session");
+    let content = tokio::fs::read_to_string(&session_file).await.ok()?;
+    let trimmed = content.trim().to_string();
+    if trimmed.is_empty() { None } else { Some(trimmed) }
 }
 
 async fn guess_base_branch(repo_dir: &Path, issue_id: &str) -> String {

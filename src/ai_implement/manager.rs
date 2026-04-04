@@ -71,6 +71,7 @@ impl ImplManager {
                 worktree_path: wt_path,
                 status: ImplStatus::Running,
                 completed_at: None,
+                session_id: None,
             },
         );
 
@@ -136,10 +137,13 @@ impl ImplManager {
     pub fn handle_event(&mut self, event: ImplEvent, dir: &str) -> ImplOutcome {
         match event {
             ImplEvent::Started { issue_id } => ImplOutcome::Started { issue_id },
-            ImplEvent::Completed { issue_id, summary } => {
+            ImplEvent::Completed { issue_id, summary, session_id } => {
                 if let Some(job) = self.jobs.get_mut(&issue_id) {
                     job.status = ImplStatus::Done;
                     job.completed_at = Some(chrono::Local::now().to_rfc3339());
+                    if session_id.is_some() {
+                        job.session_id = session_id;
+                    }
                 }
                 // descriptionへのログ追記をspawn
                 let id = issue_id.clone();
@@ -154,9 +158,12 @@ impl ImplManager {
                 });
                 ImplOutcome::Completed { issue_id, summary }
             }
-            ImplEvent::Failed { issue_id, error } => {
+            ImplEvent::Failed { issue_id, error, session_id } => {
                 if let Some(job) = self.jobs.get_mut(&issue_id) {
                     job.status = ImplStatus::Failed(error.clone());
+                    if session_id.is_some() {
+                        job.session_id = session_id;
+                    }
                 }
                 ImplOutcome::Failed { issue_id, error }
             }

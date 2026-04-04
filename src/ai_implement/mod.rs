@@ -23,6 +23,7 @@ pub struct ImplJob {
     pub worktree_path: PathBuf,
     pub status: ImplStatus,
     pub completed_at: Option<String>,
+    pub session_id: Option<String>,
 }
 
 pub struct ImplRequest {

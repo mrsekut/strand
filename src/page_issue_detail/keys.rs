@@ -26,6 +26,7 @@ pub async fn handle_key(
             match key {
                 KeyCode::Char('i') => app.copy_id(),
                 KeyCode::Char('p') => app.copy_worktree_path(),
+                KeyCode::Char('r') => app.copy_resume_command(),
                 _ => {}
             }
             return;

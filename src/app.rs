@@ -335,7 +335,7 @@ impl App {
     }
 
     /// 現在のview contextで対象となるissue_idを返す
-    fn current_issue_id(&self) -> Option<String> {
+    pub fn current_issue_id(&self) -> Option<String> {
         match &self.view {
             View::IssueDetail { issue_id, .. } => Some(issue_id.clone()),
             View::EpicDetail { epic_id, .. } => Some(epic_id.clone()),
@@ -624,6 +624,26 @@ impl App {
         };
         match crate::clipboard::copy(&id) {
             Ok(_) => self.notify(format!("Copied: {id}")),
+            Err(e) => self.notify(format!("Copy failed: {e}")),
+        }
+    }
+
+    pub fn copy_resume_command(&mut self) {
+        let Some(issue_id) = self.current_issue_id() else {
+            return;
+        };
+        let Some(job) = self.impl_manager.get_job(&issue_id) else {
+            self.notify("No impl job found");
+            return;
+        };
+        let Some(session_id) = &job.session_id else {
+            self.notify("No session ID available");
+            return;
+        };
+        let path = job.worktree_path.display();
+        let cmd = format!("cd {} && claude --resume {}", path, session_id);
+        match crate::clipboard::copy(&cmd) {
+            Ok(_) => self.notify(format!("Copied: {cmd}")),
             Err(e) => self.notify(format!("Copy failed: {e}")),
         }
     }

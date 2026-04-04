@@ -7,8 +7,8 @@ use super::worktree::create_worktree;
 
 pub enum ImplEvent {
     Started { issue_id: String },
-    Completed { issue_id: String, summary: String },
-    Failed { issue_id: String, error: String },
+    Completed { issue_id: String, summary: String, session_id: Option<String> },
+    Failed { issue_id: String, error: String, session_id: Option<String> },
 }
 
 pub async fn run(request: ImplRequest, tx: mpsc::Sender<ImplEvent>) -> Result<()> {
@@ -23,11 +23,12 @@ pub async fn run(request: ImplRequest, tx: mpsc::Sender<ImplEvent>) -> Result<()
     let result = run_inner(&request).await;
 
     match result {
-        Ok(summary) => {
+        Ok((summary, session_id)) => {
             let _ = tx
                 .send(ImplEvent::Completed {
                     issue_id: issue_id.clone(),
                     summary,
+                    session_id,
                 })
                 .await;
         }
@@ -36,6 +37,7 @@ pub async fn run(request: ImplRequest, tx: mpsc::Sender<ImplEvent>) -> Result<()
                 .send(ImplEvent::Failed {
                     issue_id: issue_id.clone(),
                     error: e.to_string(),
+                    session_id: None,
                 })
                 .await;
             return Err(e);
@@ -81,14 +83,14 @@ When done, commit your changes. The commit message body must record the backgrou
     parts.join("\n\n")
 }
 
-async fn run_inner(request: &ImplRequest) -> Result<String> {
+async fn run_inner(request: &ImplRequest) -> Result<(String, Option<String>)> {
     let (wt_path, _branch) =
         create_worktree(&request.repo_dir, &request.issue_id, &request.base_branch).await?;
 
     let prompt = build_prompt(request);
 
     let output = Command::new("claude")
-        .args(["-p", &prompt, "--allowedTools", "Edit,Write,Bash"])
+        .args(["-p", &prompt, "--allowedTools", "Edit,Write,Bash", "--output-format", "json"])
         .current_dir(&wt_path)
         .output()
         .await?;
@@ -100,6 +102,22 @@ async fn run_inner(request: &ImplRequest) -> Result<String> {
         );
     }
 
-    let summary = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(summary)
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    let (summary, session_id) = match serde_json::from_str::<serde_json::Value>(&stdout) {
+        Ok(json) => {
+            let session_id = json.get("session_id").and_then(|v| v.as_str()).map(|s| s.to_string());
+            let result = json.get("result").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            (result, session_id)
+        }
+        Err(_) => (stdout.to_string(), None),
+    };
+
+    // Persist session_id to worktree for restore
+    if let Some(ref sid) = session_id {
+        let session_file = wt_path.join(".strand-session");
+        let _ = tokio::fs::write(&session_file, sid).await;
+    }
+
+    Ok((summary, session_id))
 }
