@@ -84,6 +84,8 @@ pub async fn handle_key(
         KeyCode::Char('c') => app.copy_resume_command(),
         KeyCode::Char('l') => app.copy_log_command(),
         KeyCode::Char('q') => app.quick_create_with_editor(terminal).await,
+        KeyCode::Char('j') => app.navigate_issue(true).await,
+        KeyCode::Char('k') => app.navigate_issue(false).await,
         _ => {}
     }
 }

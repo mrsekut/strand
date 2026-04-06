@@ -244,6 +244,91 @@ impl App {
         }
     }
 
+    /// IssueDetail内で次/前のissueに移動する
+    pub async fn navigate_issue(&mut self, forward: bool) {
+        let View::IssueDetail { issue_id, .. } = &self.view else {
+            return;
+        };
+        let current_id = issue_id.clone();
+
+        // view_stackの直上がEpicDetailなら子issue間を移動、IssueListならtop-level間を移動
+        let parent = self.view_stack.last();
+        let (issues, selected_idx) = match parent {
+            Some(View::EpicDetail {
+                children,
+                child_selected,
+                ..
+            }) => {
+                let idx = children
+                    .iter()
+                    .position(|i| i.id == current_id)
+                    .unwrap_or(*child_selected);
+                (children.clone(), idx)
+            }
+            _ => {
+                let idx = self
+                    .issues
+                    .iter()
+                    .position(|i| i.id == current_id)
+                    .unwrap_or(self.selected);
+                (self.issues.clone(), idx)
+            }
+        };
+
+        if issues.is_empty() {
+            return;
+        }
+
+        let new_idx = if forward {
+            (selected_idx + 1).min(issues.len() - 1)
+        } else {
+            selected_idx.saturating_sub(1)
+        };
+
+        if new_idx == selected_idx {
+            return;
+        }
+
+        let new_issue_id = issues[new_idx].id.clone();
+
+        // 親viewのselectedも更新
+        match self.view_stack.last_mut() {
+            Some(View::EpicDetail {
+                child_selected, ..
+            }) => {
+                *child_selected = new_idx;
+            }
+            _ => {
+                self.selected = new_idx;
+            }
+        }
+
+        // 新しいissueに切り替え（子を持つかで分岐）
+        let children = bd::list_children(self.dir.as_deref(), &new_issue_id)
+            .await
+            .unwrap_or_default();
+
+        if children.is_empty() {
+            self.view = View::IssueDetail {
+                issue_id: new_issue_id.clone(),
+                scroll_offset: 0,
+                diff: None,
+            };
+            self.load_issue_detail_diff(&new_issue_id).await;
+        } else {
+            let ready_ids = bd::list_ready_ids(self.dir.as_deref(), &new_issue_id)
+                .await
+                .unwrap_or_default();
+            self.view = View::EpicDetail {
+                epic_id: new_issue_id,
+                children,
+                ready_ids,
+                child_selected: 0,
+                scroll_offset: 0,
+            };
+        }
+    }
+
     pub async fn reload_children(&mut self) {
         let epic_id = match &self.view {
             View::EpicDetail { epic_id, .. } => epic_id.clone(),
