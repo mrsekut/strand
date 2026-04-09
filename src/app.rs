@@ -10,6 +10,7 @@ use crate::ai::enrich::{self, EnrichManager, EnrichOutcome};
 use crate::ai::implement::{self, ImplManager, ImplOutcome, ImplStatus};
 use crate::ai::split::{self, SplitManager, SplitOutcome};
 use crate::bd::{self, Issue};
+use crate::filter::Filter;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfirmAction {
@@ -37,6 +38,9 @@ pub enum InputMode {
     AwaitingPriority,
     AwaitingStatus,
     AwaitingConfirm(ConfirmAction),
+    AwaitingFilter,
+    AwaitingFilterStatus,
+    AwaitingFilterLabel,
 }
 
 #[derive(Debug)]
@@ -71,6 +75,7 @@ pub struct App {
     pub notification: Option<(String, Instant)>,
     pub last_db_mtime: Option<SystemTime>,
     pub input_mode: InputMode,
+    pub filter: Filter,
 }
 
 impl App {
@@ -93,6 +98,7 @@ impl App {
             notification: None,
             last_db_mtime: None,
             input_mode: InputMode::Normal,
+            filter: Filter::new(),
         }
     }
 
@@ -131,11 +137,24 @@ impl App {
         }
     }
 
+    /// フィルタ適用済みのissueリスト
+    pub fn displayed_issues(&self) -> Vec<&Issue> {
+        if !self.filter.is_active() {
+            self.issues.iter().collect()
+        } else {
+            self.issues
+                .iter()
+                .filter(|i| self.filter.matches(i))
+                .collect()
+        }
+    }
+
     pub fn next(&mut self) {
         match &mut self.view {
             View::IssueList => {
-                if !self.issues.is_empty() {
-                    self.selected = (self.selected + 1).min(self.issues.len() - 1);
+                let len = self.displayed_issues().len();
+                if len > 0 {
+                    self.selected = (self.selected + 1).min(len - 1);
                 }
             }
             View::EpicDetail {
@@ -156,7 +175,8 @@ impl App {
     pub fn previous(&mut self) {
         match &mut self.view {
             View::IssueList => {
-                if !self.issues.is_empty() {
+                let len = self.displayed_issues().len();
+                if len > 0 {
                     self.selected = self.selected.saturating_sub(1);
                 }
             }
@@ -293,9 +313,7 @@ impl App {
 
         // 親viewのselectedも更新
         match self.view_stack.last_mut() {
-            Some(View::EpicDetail {
-                child_selected, ..
-            }) => {
+            Some(View::EpicDetail { child_selected, .. }) => {
                 *child_selected = new_idx;
             }
             _ => {
@@ -437,7 +455,7 @@ impl App {
     }
 
     pub fn selected_issue(&self) -> Option<&Issue> {
-        self.issues.get(self.selected)
+        self.displayed_issues().get(self.selected).copied()
     }
 
     /// 現在のview contextで対象となるissue_idを返す

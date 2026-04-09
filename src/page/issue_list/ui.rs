@@ -72,6 +72,15 @@ fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
         InputMode::AwaitingConfirm(action) => {
             vec![("y", action.label()), ("n", "cancel")]
         }
+        InputMode::AwaitingFilter => vec![
+            ("s", "status"),
+            ("l", "label"),
+            ("c", "clear"),
+            ("Esc", "cancel"),
+        ],
+        InputMode::AwaitingFilterStatus | InputMode::AwaitingFilterLabel => {
+            vec![("h/l", "move"), ("Space", "toggle"), ("Esc", "back")]
+        }
         InputMode::Normal => vec![
             ("Enter", "detail"),
             ("q", "create"),
@@ -79,6 +88,7 @@ fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
             ("p", "priority"),
             ("a", "ai"),
             ("s", "status"),
+            ("f", "filter"),
         ],
     };
 
