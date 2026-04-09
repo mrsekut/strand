@@ -9,18 +9,11 @@ pub async fn handle_key(
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
 ) {
     match app.input_mode {
-        InputMode::AwaitingAI => {
-            app.input_mode = InputMode::Normal;
-            app.notification = None;
-            if let KeyCode::Char('e') = key {
-                app.start_enrich();
-            }
-            return;
-        }
-        InputMode::AwaitingStatus => {
+        InputMode::Selecting => {
             app.input_mode = InputMode::Normal;
             app.notification = None;
             match key {
+                KeyCode::Char('e') => app.start_enrich(),
                 KeyCode::Char('o') => app.set_status("open").await,
                 KeyCode::Char('p') => app.set_status("in_progress").await,
                 KeyCode::Char('d') => app.set_status("deferred").await,
@@ -53,8 +46,8 @@ pub async fn handle_key(
         KeyCode::Char('y') => app.copy_id(),
         KeyCode::Char('e') => app.edit_description(terminal).await,
         KeyCode::Char('a') => {
-            app.input_mode = InputMode::AwaitingAI;
-            app.notification = Some(("a-...".into(), std::time::Instant::now()));
+            app.input_mode = InputMode::Selecting;
+            app.notification = Some(("...".into(), std::time::Instant::now()));
         }
         KeyCode::Char('m') if app.all_children_closed() => {
             app.input_mode = InputMode::AwaitingConfirm(ConfirmAction::MergeEpic);
@@ -64,8 +57,8 @@ pub async fn handle_key(
             ));
         }
         KeyCode::Char('s') => {
-            app.input_mode = InputMode::AwaitingStatus;
-            app.notification = Some(("s-...".into(), std::time::Instant::now()));
+            app.input_mode = InputMode::Selecting;
+            app.notification = Some(("...".into(), std::time::Instant::now()));
         }
         KeyCode::Char('p') => app.copy_worktree_path(),
         KeyCode::Char('c') => app.copy_resume_command(),

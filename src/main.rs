@@ -5,6 +5,7 @@ mod clipboard;
 mod editor;
 mod filter;
 mod page;
+mod selector;
 mod ui;
 mod widget;
 

@@ -9,31 +9,18 @@ pub async fn handle_key(
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
 ) {
     match app.input_mode {
-        InputMode::AwaitingAI => {
+        InputMode::Selecting => {
             app.input_mode = InputMode::Normal;
             app.notification = None;
             match key {
                 KeyCode::Char('e') => app.start_enrich(),
                 KeyCode::Char('i') => app.start_implement().await,
                 KeyCode::Char('s') => app.start_split(),
-                _ => {}
-            }
-        }
-        InputMode::AwaitingPriority => {
-            app.input_mode = InputMode::Normal;
-            app.notification = None;
-            if let KeyCode::Char(c @ '0'..='4') = key {
-                app.set_priority(c as u8 - b'0').await;
-            }
-        }
-        InputMode::AwaitingStatus => {
-            app.input_mode = InputMode::Normal;
-            app.notification = None;
-            match key {
                 KeyCode::Char('o') => app.set_status("open").await,
                 KeyCode::Char('p') => app.set_status("in_progress").await,
                 KeyCode::Char('d') => app.set_status("deferred").await,
                 KeyCode::Char('c') => app.set_status("closed").await,
+                KeyCode::Char(c @ '0'..='4') => app.set_priority(c as u8 - b'0').await,
                 _ => {}
             }
         }
@@ -54,17 +41,9 @@ pub async fn handle_key(
             KeyCode::Up | KeyCode::Char('k') => app.previous(),
             KeyCode::Enter => app.open_detail().await,
             KeyCode::Char('y') => app.copy_id(),
-            KeyCode::Char('a') => {
-                app.input_mode = InputMode::AwaitingAI;
-                app.notification = Some(("a-...".into(), std::time::Instant::now()));
-            }
-            KeyCode::Char('s') => {
-                app.input_mode = InputMode::AwaitingStatus;
-                app.notification = Some(("s-...".into(), std::time::Instant::now()));
-            }
-            KeyCode::Char('p') => {
-                app.input_mode = InputMode::AwaitingPriority;
-                app.notification = Some(("p-...".into(), std::time::Instant::now()));
+            KeyCode::Char('a') | KeyCode::Char('s') | KeyCode::Char('p') => {
+                app.input_mode = InputMode::Selecting;
+                app.notification = Some(("...".into(), std::time::Instant::now()));
             }
             KeyCode::Char('q') => app.quick_create_with_editor(terminal).await,
             _ => {}

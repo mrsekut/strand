@@ -10,6 +10,8 @@ use crate::ai::enrich::{self, EnrichManager, EnrichOutcome};
 use crate::ai::implement::{self, ImplManager, ImplOutcome, ImplStatus};
 use crate::ai::split::{self, SplitManager, SplitOutcome};
 use crate::bd::{self, Issue};
+use crate::filter::Filter;
+use crate::selector::{ExecuteSelector, ToggleSelector};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfirmAction {
@@ -33,9 +35,7 @@ impl ConfirmAction {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputMode {
     Normal,
-    AwaitingAI,
-    AwaitingPriority,
-    AwaitingStatus,
+    Selecting,
     AwaitingConfirm(ConfirmAction),
 }
 
@@ -71,6 +71,9 @@ pub struct App {
     pub notification: Option<(String, Instant)>,
     pub last_db_mtime: Option<SystemTime>,
     pub input_mode: InputMode,
+    pub filter: Filter,
+    pub execute_selector: Option<ExecuteSelector>,
+    pub toggle_selector: Option<ToggleSelector>,
 }
 
 impl App {
@@ -93,6 +96,9 @@ impl App {
             notification: None,
             last_db_mtime: None,
             input_mode: InputMode::Normal,
+            filter: Filter::new(),
+            execute_selector: None,
+            toggle_selector: None,
         }
     }
 
