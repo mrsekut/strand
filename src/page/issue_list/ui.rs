@@ -5,20 +5,46 @@ use ratatui::{
 
 use crate::app::{App, InputMode};
 use crate::bd;
-use crate::ui::{draw_notification, epic_icon, padded_keybar_line, priority_style};
+use crate::ui::{
+    draw_notification, epic_icon, execute_selector_line, padded_keybar_line, priority_style,
+    toggle_selector_line,
+};
 
 pub fn draw(frame: &mut Frame, app: &App) {
+    let has_indicator = app.filter.is_active()
+        && !matches!(app.input_mode, InputMode::Selecting if app.toggle_selector.is_some());
+
+    let mut constraints = vec![Constraint::Min(1)]; // table
+    if has_indicator {
+        constraints.push(Constraint::Length(1)); // filter indicator
+    }
+    constraints.push(Constraint::Length(1)); // keybar
+    constraints.push(Constraint::Length(1)); // notification
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Min(1),
-            Constraint::Length(1),
-            Constraint::Length(1),
-        ])
+        .constraints(constraints)
         .split(frame.area());
 
-    let rows: Vec<Row> = app
-        .issues
+    let mut idx = 0;
+    let table_area = chunks[idx];
+    idx += 1;
+
+    let indicator_area = if has_indicator {
+        let a = chunks[idx];
+        idx += 1;
+        Some(a)
+    } else {
+        None
+    };
+
+    let keybar_area = chunks[idx];
+    let notif_area = chunks[idx + 1];
+
+    // Table (with filter applied)
+    let displayed = app.displayed_issues();
+
+    let rows: Vec<Row> = displayed
         .iter()
         .map(|issue| {
             let (icon, icon_style) = epic_icon(app, issue);
@@ -46,29 +72,60 @@ pub fn draw(frame: &mut Frame, app: &App) {
 
     let mut state = TableState::default();
     state.select(Some(app.selected));
+    frame.render_stateful_widget(table, table_area, &mut state);
 
-    frame.render_stateful_widget(table, chunks[0], &mut state);
+    // Filter indicator
+    if let Some(area) = indicator_area {
+        let filter_text = app.filter.display_text();
+        let indicator = Paragraph::new(Span::styled(
+            format!(" {filter_text}"),
+            Style::default().fg(Color::Yellow),
+        ));
+        frame.render_widget(indicator, area);
+    }
 
-    draw_keybar(frame, app, chunks[1]);
-    draw_notification(frame, app, chunks[2]);
+    draw_keybar(frame, app, keybar_area);
+    draw_notification(frame, app, notif_area);
 }
 
 fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
-    let keys: Vec<(&str, &str)> = match app.input_mode {
-        InputMode::Selecting => vec![],  // TODO: Step 2でセレクタ表示に置き換え
-        InputMode::AwaitingConfirm(action) => {
-            vec![("y", action.label()), ("n", "cancel")]
+    let line = match app.input_mode {
+        InputMode::Selecting => {
+            if let Some(sel) = &app.execute_selector {
+                execute_selector_line(sel.items, sel.cursor)
+            } else if let Some(sel) = &app.toggle_selector {
+                toggle_selector_line(&sel.items, sel.cursor)
+            } else {
+                padded_keybar_line(&[])
+            }
         }
-        InputMode::Normal => vec![
-            ("Enter", "detail"),
-            ("q", "create"),
-            ("y", "copy id"),
-            ("p", "priority"),
-            ("a", "ai"),
-            ("s", "status"),
-        ],
+        InputMode::AwaitingConfirm(action) => {
+            padded_keybar_line(&[("y", action.label()), ("n", "cancel")])
+        }
+        InputMode::Normal => {
+            if app.filter.is_active() {
+                padded_keybar_line(&[
+                    ("Enter", "detail"),
+                    ("q", "create"),
+                    ("y", "copy id"),
+                    ("p", "priority"),
+                    ("a", "ai"),
+                    ("s", "status"),
+                    ("f", "filter*"),
+                ])
+            } else {
+                padded_keybar_line(&[
+                    ("Enter", "detail"),
+                    ("q", "create"),
+                    ("y", "copy id"),
+                    ("p", "priority"),
+                    ("a", "ai"),
+                    ("s", "status"),
+                    ("f", "filter"),
+                ])
+            }
+        }
     };
 
-    let line = padded_keybar_line(&keys);
     frame.render_widget(Paragraph::new(line), area);
 }

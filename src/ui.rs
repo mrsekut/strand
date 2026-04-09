@@ -86,6 +86,63 @@ pub fn keybar_line(keys: &[(&str, &str)]) -> Line<'static> {
     Line::from(spans)
 }
 
+/// ExecuteSelector用: キーバー風セレクタ。カーソル位置をハイライト。
+pub fn execute_selector_line(items: &[(&str, &str)], cursor: usize) -> Line<'static> {
+    let mut spans = vec![Span::raw(" ")];
+    for (i, (key, desc)) in items.iter().enumerate() {
+        if i > 0 {
+            spans.push(Span::raw("  "));
+        }
+        let is_cursor = i == cursor;
+        let (key_style, desc_style) = if is_cursor {
+            (
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::UNDERLINED),
+            )
+        } else {
+            (
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+                Style::default().fg(Color::DarkGray),
+            )
+        };
+        spans.push(Span::styled(key.to_string(), key_style));
+        spans.push(Span::styled(format!(" {desc}"), desc_style));
+    }
+    Line::from(spans)
+}
+
+/// ToggleSelector用: 選択状態を色で表現。カーソル位置をハイライト。
+pub fn toggle_selector_line(items: &[(String, bool)], cursor: usize) -> Line<'static> {
+    let mut spans = vec![Span::raw(" ")];
+    for (i, (label, selected)) in items.iter().enumerate() {
+        if i > 0 {
+            spans.push(Span::raw("  "));
+        }
+        let is_cursor = i == cursor;
+        let style = if is_cursor && *selected {
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
+        } else if is_cursor {
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
+        } else if *selected {
+            Style::default().fg(Color::Yellow)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+        spans.push(Span::styled(label.clone(), style));
+    }
+    Line::from(spans)
+}
+
 pub fn draw_notification(frame: &mut Frame, app: &App, area: Rect) {
     if let Some((msg, time)) = &app.notification {
         if time.elapsed().as_secs() < 5 {

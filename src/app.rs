@@ -137,11 +137,21 @@ impl App {
         }
     }
 
+    /// フィルタ適用済みのissueリスト
+    pub fn displayed_issues(&self) -> Vec<&Issue> {
+        if !self.filter.is_active() {
+            self.issues.iter().collect()
+        } else {
+            self.issues.iter().filter(|i| self.filter.matches(i)).collect()
+        }
+    }
+
     pub fn next(&mut self) {
         match &mut self.view {
             View::IssueList => {
-                if !self.issues.is_empty() {
-                    self.selected = (self.selected + 1).min(self.issues.len() - 1);
+                let len = self.displayed_issues().len();
+                if len > 0 {
+                    self.selected = (self.selected + 1).min(len - 1);
                 }
             }
             View::EpicDetail {
@@ -162,7 +172,8 @@ impl App {
     pub fn previous(&mut self) {
         match &mut self.view {
             View::IssueList => {
-                if !self.issues.is_empty() {
+                let len = self.displayed_issues().len();
+                if len > 0 {
                     self.selected = self.selected.saturating_sub(1);
                 }
             }
@@ -443,7 +454,7 @@ impl App {
     }
 
     pub fn selected_issue(&self) -> Option<&Issue> {
-        self.issues.get(self.selected)
+        self.displayed_issues().get(self.selected).copied()
     }
 
     /// 現在のview contextで対象となるissue_idを返す
