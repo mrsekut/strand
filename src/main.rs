@@ -5,6 +5,7 @@ mod clipboard;
 mod editor;
 mod page;
 mod ui;
+mod widget;
 
 use std::io::stdout;
 use std::time::Duration;
