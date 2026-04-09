@@ -2,6 +2,8 @@ use crossterm::event::KeyCode;
 use ratatui::prelude::*;
 
 use crate::app::{App, ConfirmAction, InputMode};
+use crate::page::selector_keys;
+use crate::selector::{self, ExecuteSelector};
 
 pub async fn handle_key(
     key: KeyCode,
@@ -10,20 +12,10 @@ pub async fn handle_key(
 ) {
     match app.input_mode {
         InputMode::Selecting => {
-            app.input_mode = InputMode::Normal;
-            app.notification = None;
-            match key {
-                KeyCode::Char('e') => app.start_enrich(),
-                KeyCode::Char('i') => app.start_implement().await,
-                KeyCode::Char('s') => app.start_split(),
-                KeyCode::Char('o') => app.set_status("open").await,
-                KeyCode::Char('p') => app.set_status("in_progress").await,
-                KeyCode::Char('d') => app.set_status("deferred").await,
-                KeyCode::Char('c') => {
-                    app.set_status("closed").await;
-                    app.back();
-                }
-                _ => {}
+            let label = selector_keys::handle_selecting_key(key, app).await;
+            // issue_detail固有: closed時にback
+            if label == Some("closed") {
+                app.back();
             }
             return;
         }
@@ -64,9 +56,13 @@ pub async fn handle_key(
             app.input_mode = InputMode::AwaitingConfirm(ConfirmAction::Retry);
             app.notification = Some(("Retry? (y/n)".into(), std::time::Instant::now()));
         }
-        KeyCode::Char('a') | KeyCode::Char('s') => {
+        KeyCode::Char('a') => {
+            app.execute_selector = Some(ExecuteSelector::new(selector::AI_ITEMS));
             app.input_mode = InputMode::Selecting;
-            app.notification = Some(("...".into(), std::time::Instant::now()));
+        }
+        KeyCode::Char('s') => {
+            app.execute_selector = Some(ExecuteSelector::new(selector::STATUS_ITEMS));
+            app.input_mode = InputMode::Selecting;
         }
         KeyCode::Char('p') => app.copy_worktree_path(),
         KeyCode::Char('c') => app.copy_resume_command(),

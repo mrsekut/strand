@@ -8,8 +8,8 @@ use chrono::{DateTime, FixedOffset};
 use crate::ai::implement::ImplStatus;
 use crate::app::{App, InputMode, View};
 use crate::ui::{
-    draw_notification, format_timestamp, keybar_line, padded_keybar_line, priority_style,
-    status_style,
+    draw_notification, execute_selector_line, format_timestamp, keybar_line, padded_keybar_line,
+    priority_style, status_style, toggle_selector_line,
 };
 
 pub fn draw(frame: &mut Frame, app: &App) {
@@ -173,21 +173,28 @@ pub fn draw(frame: &mut Frame, app: &App) {
 }
 
 fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
-    let keys: Vec<(&str, &str)> = match app.input_mode {
-        InputMode::Selecting => vec![],
-        InputMode::AwaitingConfirm(action) => {
-            vec![("y", action.label()), ("n", "cancel")]
+    let line = match app.input_mode {
+        InputMode::Selecting => {
+            if let Some(sel) = &app.execute_selector {
+                execute_selector_line(sel.items, sel.cursor)
+            } else if let Some(sel) = &app.toggle_selector {
+                toggle_selector_line(&sel.items, sel.cursor)
+            } else {
+                padded_keybar_line(&[])
+            }
         }
-        _ => vec![
+        InputMode::AwaitingConfirm(action) => {
+            padded_keybar_line(&[("y", action.label()), ("n", "cancel")])
+        }
+        _ => padded_keybar_line(&[
             ("Esc", "back"),
             ("q", "create"),
             ("y", "copy id"),
             ("e", "edit"),
             ("a", "ai"),
             ("s", "status"),
-        ],
+        ]),
     };
 
-    let line = padded_keybar_line(&keys);
     frame.render_widget(Paragraph::new(line), area);
 }
