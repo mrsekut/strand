@@ -61,6 +61,11 @@ struct ClaudeResponse {
     result: String,
 }
 
+pub fn parse_text_result(json_str: &str) -> Result<String> {
+    let wrapper: ClaudeResponse = serde_json::from_str(json_str)?;
+    Ok(wrapper.result)
+}
+
 pub fn parse_result(json_str: &str) -> Result<EnrichResult> {
     let wrapper: ClaudeResponse = serde_json::from_str(json_str)?;
     let inner = extract_json(&wrapper.result)?;
