@@ -26,6 +26,11 @@ use ratatui::prelude::*;
 async fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
 
+    if args.iter().any(|a| a == "--help" || a == "-h") {
+        print_help();
+        return Ok(());
+    }
+
     let dir = args
         .iter()
         .position(|a| a == "--dir")
@@ -60,6 +65,28 @@ async fn main() -> Result<()> {
     stdout().execute(LeaveAlternateScreen)?;
 
     result
+}
+
+fn print_help() {
+    println!(
+        "\
+strand — AI-powered issue management TUI
+
+USAGE:
+    strand [OPTIONS]
+    strand q <title>
+
+COMMANDS:
+    q <title>    Quick-capture an issue
+
+OPTIONS:
+    --dir <path>    Set working directory
+    -h, --help      Show this help
+
+ENVIRONMENT VARIABLES:
+    STRAND_ENRICH_SKILL    Agent skill name to use for enrich (default: built-in problem/solution analysis)
+                           Example: STRAND_ENRICH_SKILL=my-analysis-skill strand"
+    );
 }
 
 async fn run(
