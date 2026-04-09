@@ -3,7 +3,7 @@ use ratatui::prelude::*;
 
 use crate::app::{App, ConfirmAction, InputMode};
 use crate::page::selector_keys;
-use crate::selector::{self, ExecuteSelector};
+use crate::selector::{self, ExecuteSelector, SelectTarget};
 
 pub async fn handle_key(
     key: KeyCode,
@@ -12,9 +12,9 @@ pub async fn handle_key(
 ) {
     match app.input_mode {
         InputMode::Selecting => {
-            let label = selector_keys::handle_selecting_key(key, app).await;
+            let result = selector_keys::handle_selecting_key(key, app).await;
             // issue_detail固有: closed時にback
-            if label == Some("closed") {
+            if result == Some((SelectTarget::Status, 3)) {
                 app.back();
             }
             return;
@@ -57,11 +57,14 @@ pub async fn handle_key(
             app.notification = Some(("Retry? (y/n)".into(), std::time::Instant::now()));
         }
         KeyCode::Char('a') => {
-            app.execute_selector = Some(ExecuteSelector::new(selector::AI_ITEMS));
+            app.execute_selector = Some(ExecuteSelector::new(SelectTarget::AI, selector::AI_ITEMS));
             app.input_mode = InputMode::Selecting;
         }
         KeyCode::Char('s') => {
-            app.execute_selector = Some(ExecuteSelector::new(selector::STATUS_ITEMS));
+            app.execute_selector = Some(ExecuteSelector::new(
+                SelectTarget::Status,
+                selector::STATUS_ITEMS,
+            ));
             app.input_mode = InputMode::Selecting;
         }
         KeyCode::Char('p') => app.copy_worktree_path(),

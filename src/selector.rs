@@ -1,19 +1,38 @@
 use crossterm::event::KeyCode;
 
+/// セレクタが何を選択しているかの種別
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectTarget {
+    AI,
+    Status,
+    Priority,
+    FilterMenu,
+}
+
 /// 「選択して実行」型セレクタ。Enterで選択、モードを抜ける。
 pub struct ExecuteSelector {
+    pub target: SelectTarget,
     /// (shortcut_key, label)
     pub items: &'static [(&'static str, &'static str)],
     pub cursor: usize,
 }
 
 impl ExecuteSelector {
-    pub fn new(items: &'static [(&'static str, &'static str)]) -> Self {
-        Self { items, cursor: 0 }
+    pub fn new(target: SelectTarget, items: &'static [(&'static str, &'static str)]) -> Self {
+        Self {
+            target,
+            items,
+            cursor: 0,
+        }
     }
 
-    pub fn with_cursor(items: &'static [(&'static str, &'static str)], cursor: usize) -> Self {
+    pub fn with_cursor(
+        target: SelectTarget,
+        items: &'static [(&'static str, &'static str)],
+        cursor: usize,
+    ) -> Self {
         Self {
+            target,
             items,
             cursor: cursor.min(items.len().saturating_sub(1)),
         }
@@ -67,15 +86,27 @@ pub enum ExecuteResult {
     Cancelled,
 }
 
+/// トグルセレクタの種別
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToggleTarget {
+    FilterStatus,
+    FilterLabel,
+}
+
 /// 「複数トグル」型セレクタ。Spaceで ON/OFF、Escで抜ける。
 pub struct ToggleSelector {
+    pub target: ToggleTarget,
     pub items: Vec<(String, bool)>, // (label, selected)
     pub cursor: usize,
 }
 
 impl ToggleSelector {
-    pub fn new(items: Vec<(String, bool)>) -> Self {
-        Self { items, cursor: 0 }
+    pub fn new(target: ToggleTarget, items: Vec<(String, bool)>) -> Self {
+        Self {
+            target,
+            items,
+            cursor: 0,
+        }
     }
 
     pub fn move_left(&mut self) {
@@ -135,11 +166,7 @@ pub enum ToggleResult {
 
 // --- プリセット定義 ---
 
-pub const AI_ITEMS: &[(&str, &str)] = &[
-    ("e", "enrich"),
-    ("i", "implement"),
-    ("s", "split"),
-];
+pub const AI_ITEMS: &[(&str, &str)] = &[("e", "enrich"), ("i", "implement"), ("s", "split")];
 
 pub const STATUS_ITEMS: &[(&str, &str)] = &[
     ("o", "open"),
@@ -156,11 +183,7 @@ pub const PRIORITY_ITEMS: &[(&str, &str)] = &[
     ("4", "P4"),
 ];
 
-pub const FILTER_MENU_ITEMS: &[(&str, &str)] = &[
-    ("s", "status"),
-    ("l", "label"),
-    ("c", "clear"),
-];
+pub const FILTER_MENU_ITEMS: &[(&str, &str)] = &[("s", "status"), ("l", "label"), ("c", "clear")];
 
 #[cfg(test)]
 mod tests {
@@ -168,7 +191,7 @@ mod tests {
 
     #[test]
     fn execute_selector_shortcut() {
-        let mut sel = ExecuteSelector::new(AI_ITEMS);
+        let mut sel = ExecuteSelector::new(SelectTarget::AI, AI_ITEMS);
         assert!(matches!(
             sel.handle_key(KeyCode::Char('i')),
             ExecuteResult::Selected(1)
@@ -177,7 +200,7 @@ mod tests {
 
     #[test]
     fn execute_selector_cursor_move_and_enter() {
-        let mut sel = ExecuteSelector::new(AI_ITEMS);
+        let mut sel = ExecuteSelector::new(SelectTarget::AI, AI_ITEMS);
         sel.handle_key(KeyCode::Right);
         sel.handle_key(KeyCode::Right);
         assert_eq!(sel.cursor, 2);
@@ -189,7 +212,7 @@ mod tests {
 
     #[test]
     fn execute_selector_cursor_clamp() {
-        let mut sel = ExecuteSelector::new(AI_ITEMS);
+        let mut sel = ExecuteSelector::new(SelectTarget::AI, AI_ITEMS);
         sel.handle_key(KeyCode::Left);
         assert_eq!(sel.cursor, 0);
         for _ in 0..10 {
@@ -200,10 +223,10 @@ mod tests {
 
     #[test]
     fn toggle_selector_basic() {
-        let mut sel = ToggleSelector::new(vec![
-            ("open".into(), false),
-            ("closed".into(), false),
-        ]);
+        let mut sel = ToggleSelector::new(
+            ToggleTarget::FilterStatus,
+            vec![("open".into(), false), ("closed".into(), false)],
+        );
         sel.handle_key(KeyCode::Char(' '));
         assert!(sel.items[0].1);
         assert!(!sel.items[1].1);
@@ -212,11 +235,14 @@ mod tests {
 
     #[test]
     fn toggle_selector_move_and_toggle() {
-        let mut sel = ToggleSelector::new(vec![
-            ("a".into(), false),
-            ("b".into(), false),
-            ("c".into(), false),
-        ]);
+        let mut sel = ToggleSelector::new(
+            ToggleTarget::FilterStatus,
+            vec![
+                ("a".into(), false),
+                ("b".into(), false),
+                ("c".into(), false),
+            ],
+        );
         sel.handle_key(KeyCode::Right);
         sel.handle_key(KeyCode::Char(' '));
         sel.handle_key(KeyCode::Right);

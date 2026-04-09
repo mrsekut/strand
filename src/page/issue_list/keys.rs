@@ -3,7 +3,7 @@ use ratatui::prelude::*;
 
 use crate::app::{App, ConfirmAction, InputMode};
 use crate::page::selector_keys;
-use crate::selector::{self, ExecuteSelector};
+use crate::selector::{self, ExecuteSelector, SelectTarget};
 
 pub async fn handle_key(
     key: KeyCode,
@@ -32,20 +32,30 @@ pub async fn handle_key(
             KeyCode::Enter => app.open_detail().await,
             KeyCode::Char('y') => app.copy_id(),
             KeyCode::Char('a') => {
-                app.execute_selector = Some(ExecuteSelector::new(selector::AI_ITEMS));
+                app.execute_selector =
+                    Some(ExecuteSelector::new(SelectTarget::AI, selector::AI_ITEMS));
                 app.input_mode = InputMode::Selecting;
             }
             KeyCode::Char('s') => {
-                app.execute_selector = Some(ExecuteSelector::new(selector::STATUS_ITEMS));
+                app.execute_selector = Some(ExecuteSelector::new(
+                    SelectTarget::Status,
+                    selector::STATUS_ITEMS,
+                ));
                 app.input_mode = InputMode::Selecting;
             }
             KeyCode::Char('p') => {
-                app.execute_selector =
-                    Some(ExecuteSelector::with_cursor(selector::PRIORITY_ITEMS, 2));
+                app.execute_selector = Some(ExecuteSelector::with_cursor(
+                    SelectTarget::Priority,
+                    selector::PRIORITY_ITEMS,
+                    2,
+                ));
                 app.input_mode = InputMode::Selecting;
             }
             KeyCode::Char('f') => {
-                app.execute_selector = Some(ExecuteSelector::new(selector::FILTER_MENU_ITEMS));
+                app.execute_selector = Some(ExecuteSelector::new(
+                    SelectTarget::FilterMenu,
+                    selector::FILTER_MENU_ITEMS,
+                ));
                 app.input_mode = InputMode::Selecting;
             }
             KeyCode::Char('q') => app.quick_create_with_editor(terminal).await,

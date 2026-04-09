@@ -3,7 +3,7 @@ use ratatui::prelude::*;
 
 use crate::app::{App, ConfirmAction, InputMode};
 use crate::page::selector_keys;
-use crate::selector::{self, ExecuteSelector};
+use crate::selector::{self, ExecuteSelector, SelectTarget};
 
 pub async fn handle_key(
     key: KeyCode,
@@ -39,7 +39,7 @@ pub async fn handle_key(
         KeyCode::Char('y') => app.copy_id(),
         KeyCode::Char('e') => app.edit_description(terminal).await,
         KeyCode::Char('a') => {
-            app.execute_selector = Some(ExecuteSelector::new(selector::AI_ITEMS));
+            app.execute_selector = Some(ExecuteSelector::new(SelectTarget::AI, selector::AI_ITEMS));
             app.input_mode = InputMode::Selecting;
         }
         KeyCode::Char('m') if app.all_children_closed() => {
@@ -50,7 +50,10 @@ pub async fn handle_key(
             ));
         }
         KeyCode::Char('s') => {
-            app.execute_selector = Some(ExecuteSelector::new(selector::STATUS_ITEMS));
+            app.execute_selector = Some(ExecuteSelector::new(
+                SelectTarget::Status,
+                selector::STATUS_ITEMS,
+            ));
             app.input_mode = InputMode::Selecting;
         }
         KeyCode::Char('p') => app.copy_worktree_path(),
