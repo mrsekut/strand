@@ -3,6 +3,7 @@ mod app;
 mod bd;
 mod clipboard;
 mod editor;
+mod filter;
 mod page;
 mod ui;
 mod widget;
