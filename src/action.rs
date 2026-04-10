@@ -16,6 +16,7 @@ pub enum AppAction {
 
     // ── Overlay（セレクタ・確認） ──
     OpenSelector(SelectorDef),
+    OpenConfirm(ConfirmAction),
     CloseOverlay,
     Confirm(ConfirmAction),
 

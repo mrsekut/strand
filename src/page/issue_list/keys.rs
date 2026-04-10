@@ -1,40 +1,35 @@
 use crossterm::event::KeyCode;
-use ratatui::prelude::*;
 
 use crate::action::{AppAction, SelectorDef, SelectorItem};
 use crate::app::App;
-use crate::overlay::Overlay;
 
-pub async fn handle_key(
-    key: KeyCode,
-    app: &mut App,
-    terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
-) {
+pub fn handle_key(key: KeyCode, app: &App) -> Vec<AppAction> {
     match key {
-        KeyCode::Down | KeyCode::Char('j') => app.next(),
-        KeyCode::Up | KeyCode::Char('k') => app.previous(),
-        KeyCode::Enter => app.open_detail().await,
-        KeyCode::Char('y') => app.copy_id(),
-        KeyCode::Char('a') => {
-            if let Some(def) = build_ai_selector(app) {
-                app.overlay = Overlay::open_selector(def);
-            }
-        }
-        KeyCode::Char('s') => {
-            if let Some(def) = build_status_selector(app) {
-                app.overlay = Overlay::open_selector(def);
-            }
-        }
-        KeyCode::Char('p') => {
-            if let Some(def) = build_priority_selector(app) {
-                app.overlay = Overlay::open_selector(def);
-            }
-        }
-        KeyCode::Char('f') => {
-            app.overlay = Overlay::open_selector(build_filter_menu_selector());
-        }
-        KeyCode::Char('q') => app.quick_create_with_editor(terminal).await,
-        _ => {}
+        KeyCode::Down | KeyCode::Char('j') => vec![AppAction::Next],
+        KeyCode::Up | KeyCode::Char('k') => vec![AppAction::Previous],
+        KeyCode::Enter => match app.selected_issue() {
+            Some(issue) => vec![AppAction::OpenDetail(issue.id.clone())],
+            None => vec![],
+        },
+        KeyCode::Char('y') => match app.current_issue_id() {
+            Some(id) => vec![AppAction::CopyId(id)],
+            None => vec![],
+        },
+        KeyCode::Char('a') => match build_ai_selector(app) {
+            Some(def) => vec![AppAction::OpenSelector(def)],
+            None => vec![],
+        },
+        KeyCode::Char('s') => match build_status_selector(app) {
+            Some(def) => vec![AppAction::OpenSelector(def)],
+            None => vec![],
+        },
+        KeyCode::Char('p') => match build_priority_selector(app) {
+            Some(def) => vec![AppAction::OpenSelector(def)],
+            None => vec![],
+        },
+        KeyCode::Char('f') => vec![AppAction::OpenSelector(build_filter_menu_selector())],
+        KeyCode::Char('q') => vec![AppAction::QuickCreate],
+        _ => vec![],
     }
 }
 

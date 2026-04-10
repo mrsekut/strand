@@ -121,61 +121,12 @@ ENVIRONMENT VARIABLES:
     );
 }
 
-/// Overlay から返された AppAction を実行する。
-/// Step 3 で App::process_action() に統合予定。
-async fn execute_action(
-    app: &mut App,
-    action: action::AppAction,
-    terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
-) {
-    use action::AppAction;
-    match action {
-        AppAction::Confirm(confirm) => match confirm {
-            app::ConfirmAction::Merge => {
-                app.merge_impl().await;
-                // IssueDetail にいる場合は back
-                if matches!(&app.view, View::IssueDetail { .. }) {
-                    app.back();
-                }
-            }
-            app::ConfirmAction::Discard => app.discard_impl().await,
-            app::ConfirmAction::MergeEpic => app.merge_epic().await,
-            app::ConfirmAction::Retry => app.retry_impl().await,
-        },
-        AppAction::StartEnrich(id) => {
-            // current_issue を探して start_enrich を呼ぶ
-            app.start_enrich();
-        }
-        AppAction::StartImplement { .. } => {
-            app.start_implement().await;
-        }
-        AppAction::StartSplit(_) => {
-            app.start_split();
-        }
-        AppAction::SetStatus { issue_id, status } => {
-            app.set_status(&status).await;
-            // IssueDetail で closed にした場合は back
-            if status == "closed" && matches!(&app.view, View::IssueDetail { .. }) {
-                app.back();
-            }
-        }
-        AppAction::SetPriority { issue_id, priority } => {
-            app.set_priority(priority).await;
-        }
-        AppAction::ClearFilter => {
-            app.filter.clear();
-            app.selected = 0;
-        }
-        AppAction::OpenFilterStatusToggle => {
-            overlay::open_filter_status_toggle(app);
-        }
-        AppAction::OpenFilterLabelToggle => {
-            overlay::open_filter_label_toggle(app);
-        }
-        AppAction::QuickCreate => {
-            app.quick_create_with_editor(terminal).await;
-        }
-        _ => {}
+/// View に応じてキーハンドラを呼ぶ（sync）
+fn dispatch_key(key: KeyCode, app: &App) -> Vec<action::AppAction> {
+    match &app.view {
+        View::IssueList => page::issue_list::keys::handle_key(key, app),
+        View::IssueDetail { .. } => page::issue_detail::keys::handle_key(key, app),
+        View::EpicDetail { .. } => page::epic_detail::keys::handle_key(key, app),
     }
 }
 
@@ -199,19 +150,13 @@ async fn run(
                         }
                         // Overlay が先にキーを消費
                         let outcome = overlay::handle_overlay_key(key.code, app);
-                        match outcome {
-                            overlay::OverlayOutcome::NotConsumed => {
-                                // ページにキーを渡す
-                                match &app.view {
-                                    View::IssueList => page::issue_list::keys::handle_key(key.code, app, terminal).await,
-                                    View::IssueDetail { .. } => page::issue_detail::keys::handle_key(key.code, app, terminal).await,
-                                    View::EpicDetail { .. } => page::epic_detail::keys::handle_key(key.code, app, terminal).await,
-                                }
-                            }
-                            overlay::OverlayOutcome::Consumed => {}
-                            overlay::OverlayOutcome::Action(action) => {
-                                execute_action(app, action, terminal).await;
-                            }
+                        let actions = match outcome {
+                            overlay::OverlayOutcome::NotConsumed => dispatch_key(key.code, app),
+                            overlay::OverlayOutcome::Consumed => vec![],
+                            overlay::OverlayOutcome::Action(action) => vec![action],
+                        };
+                        for action in actions {
+                            app.process_action(action, terminal).await;
                         }
                     }
                     Some(Ok(_)) => {}
@@ -232,7 +177,6 @@ async fn run(
                 if app.has_db_changed() {
                     let _ = app.load_issues().await;
                     app.auto_enrich();
-                    // Also reload children if we're in epic detail
                     app.reload_children().await;
                 }
             }

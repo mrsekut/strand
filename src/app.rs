@@ -30,6 +30,15 @@ impl ConfirmAction {
             ConfirmAction::Retry => "confirm retry",
         }
     }
+
+    pub fn confirm_message(&self) -> &'static str {
+        match self {
+            ConfirmAction::Merge => "Merge? (y/n)",
+            ConfirmAction::Discard => "Discard? (y/n)",
+            ConfirmAction::MergeEpic => "Merge epic to master? (y/n)",
+            ConfirmAction::Retry => "Retry? (y/n)",
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -944,6 +953,101 @@ impl App {
                 !children.is_empty() && children.iter().all(|c| c.status == "closed")
             }
             _ => false,
+        }
+    }
+
+    /// AppAction を処理する。全操作のディスパッチャ。
+    pub async fn process_action(
+        &mut self,
+        action: crate::action::AppAction,
+        terminal: &mut ratatui::Terminal<ratatui::prelude::CrosstermBackend<std::io::Stdout>>,
+    ) {
+        use crate::action::AppAction;
+        use crate::overlay::{self, Overlay};
+
+        match action {
+            // ── Navigation ──
+            AppAction::Next => self.next(),
+            AppAction::Previous => self.previous(),
+            AppAction::OpenDetail(id) => self.open_detail().await,
+            AppAction::OpenChildDetail(id) => self.open_child_detail().await,
+            AppAction::Back => self.back(),
+            AppAction::NavigateIssue { forward } => self.navigate_issue(forward).await,
+
+            // ── Overlay ──
+            AppAction::OpenSelector(def) => {
+                self.overlay = Overlay::open_selector(def);
+            }
+            AppAction::OpenConfirm(confirm) => {
+                self.notification =
+                    Some((confirm.confirm_message().into(), std::time::Instant::now()));
+                self.overlay = Overlay::Confirm(confirm);
+            }
+            AppAction::CloseOverlay => {
+                self.overlay = Overlay::None;
+                self.notification = None;
+            }
+            AppAction::Confirm(confirm) => match confirm {
+                ConfirmAction::Merge => {
+                    self.merge_impl().await;
+                    if matches!(&self.view, View::IssueDetail { .. }) {
+                        self.back();
+                    }
+                }
+                ConfirmAction::Discard => self.discard_impl().await,
+                ConfirmAction::MergeEpic => self.merge_epic().await,
+                ConfirmAction::Retry => self.retry_impl().await,
+            },
+
+            // ── AI workflows ──
+            AppAction::StartEnrich(_) => self.start_enrich(),
+            AppAction::StartImplement { .. } => self.start_implement().await,
+            AppAction::StartSplit(_) => self.start_split(),
+
+            // ── Impl operations ──
+            AppAction::MergeImpl(_) => self.merge_impl().await,
+            AppAction::DiscardImpl(_) => self.discard_impl().await,
+            AppAction::RetryImpl(_) => self.retry_impl().await,
+            AppAction::MergeEpic(_) => self.merge_epic().await,
+
+            // ── State changes ──
+            AppAction::SetStatus { status, .. } => {
+                self.set_status(&status).await;
+                if status == "closed" && matches!(&self.view, View::IssueDetail { .. }) {
+                    self.back();
+                }
+            }
+            AppAction::SetPriority { priority, .. } => {
+                self.set_priority(priority).await;
+            }
+
+            // ── Editor ──
+            AppAction::QuickCreate => self.quick_create_with_editor(terminal).await,
+            AppAction::EditDescription(id) => self.edit_description(terminal).await,
+
+            // ── Clipboard ──
+            AppAction::CopyId(id) => match crate::clipboard::copy(&id) {
+                Ok(_) => self.notify(format!("Copied: {id}")),
+                Err(e) => self.notify(format!("Copy failed: {e}")),
+            },
+            AppAction::CopyResumeCommand(_) => self.copy_resume_command(),
+            AppAction::CopyLogCommand(_) => self.copy_log_command(),
+            AppAction::CopyWorktreePath(_) => self.copy_worktree_path(),
+
+            // ── Filter ──
+            AppAction::SetFilter(_) => {} // TODO: used by ToggleSelector in future
+            AppAction::ClearFilter => {
+                self.filter.clear();
+                self.selected = 0;
+            }
+            AppAction::OpenFilterStatusToggle => overlay::open_filter_status_toggle(self),
+            AppAction::OpenFilterLabelToggle => overlay::open_filter_label_toggle(self),
+
+            // ── System ──
+            AppAction::Notify(msg) => self.notify(msg),
+            AppAction::ReloadIssues => {
+                let _ = self.load_issues().await;
+            }
         }
     }
 }
