@@ -1,8 +1,17 @@
 [package]
-name = "strand"
+name = "strand-tui"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.86"
+description = "AI-powered TUI frontend for beads — throw issues in, AI writes the code"
+license = "MIT"
+repository = "https://github.com/mrsekut/strand"
+keywords = ["tui", "ai", "issue-tracking", "beads", "claude"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "strand"
+path = "src/main.rs"
 
 [dependencies]
 ratatui = "0.30"

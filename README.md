@@ -17,7 +17,9 @@ An AI-powered TUI frontend for [beads](https://github.com/steveyegge/beads). Thr
 ## Install
 
 ```bash
-cargo install strand
+cargo install strand-tui
+# or
+nix profile install github:mrsekut/strand
 ```
 
 ### Prerequisites

@@ -31,6 +31,8 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
+    check_prerequisites()?;
+
     let dir = args
         .iter()
         .position(|a| a == "--dir")
@@ -65,6 +67,34 @@ async fn main() -> Result<()> {
     stdout().execute(LeaveAlternateScreen)?;
 
     result
+}
+
+fn check_prerequisites() -> Result<()> {
+    let mut missing = Vec::new();
+
+    if which("bd").is_none() {
+        missing.push("  ✗ bd (beads CLI) — https://github.com/steveyegge/beads");
+    }
+    if which("claude").is_none() {
+        missing.push("  ✗ claude (Claude Code CLI) — https://claude.ai/claude-code");
+    }
+
+    if !missing.is_empty() {
+        anyhow::bail!(
+            "Required dependencies not found:\n{}\n\nInstall them and try again.",
+            missing.join("\n")
+        );
+    }
+    Ok(())
+}
+
+fn which(cmd: &str) -> Option<std::path::PathBuf> {
+    std::env::var_os("PATH").and_then(|paths| {
+        std::env::split_paths(&paths).find_map(|dir| {
+            let path = dir.join(cmd);
+            path.is_file().then_some(path)
+        })
+    })
 }
 
 fn print_help() {
