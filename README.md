@@ -1,128 +1,38 @@
 # strand
 
-AI-assisted Issue Triage Cockpit — a TUI wrapper for the beads CLI.
+**Throw issues in, AI writes the code.**
 
-Throw in a bunch of issues, let AI automatically refine and prototype them, and triage (approve/reject/merge) on the TUI.
+An AI-powered TUI frontend for [beads](https://github.com/steveyegge/beads). Throw in rough issue descriptions — AI analyzes, splits into subtasks, implements each one in isolated git worktrees, and you just review & merge.
 
-## Concept
+<!-- TODO: demo GIF here -->
 
-**"Throw it in rough, AI will structure and organize it for you."**
+## How it works
 
-Three loops drive the workflow:
+1. **Capture** — `strand q "button is broken"` to create an issue in one shot
+2. **Enrich** — AI analyzes the problem and proposes solutions in the background
+3. **Split** — AI decomposes the issue into concrete subtasks
+4. **Implement** — AI writes code in isolated git worktrees, one per task
+5. **Merge** — Review the diff on the TUI and merge with a single keystroke
 
-1. **Capture** — `strand q "button is broken"` for zero-friction issue creation
-2. **Enrich** — AI analyzes problems and generates solution proposals in the background
-3. **Triage** — Review AI proposals on the TUI and approve/reject/defer at speed
-
-## Prerequisites
-
-- Rust (cargo)
-- [beads](https://github.com/anthropics/beads) CLI (`bd` command)
-- [Claude Code](https://claude.ai/claude-code) CLI (`claude` command)
-
-## Build
+## Install
 
 ```bash
-cargo build
+cargo install strand
 ```
 
-## Usage
+### Prerequisites
 
-### Launch TUI
+- [beads](https://github.com/steveyegge/beads) CLI (`bd` command) — issue tracking backend
+- [Claude Code](https://claude.ai/claude-code) CLI (`claude` command) — AI engine
+
+## Quick Start
 
 ```bash
-strand              # current directory
-strand --dir /path  # specify directory
+# Create an issue
+strand q "fix the login bug"
+
+# Open the TUI
+strand
 ```
 
-### Quick Capture
-
-```bash
-strand q "issue title"
-```
-
-Creates a P2 task with auto-enrich enabled.
-
-## Key Bindings
-
-### Issue List
-
-| Key       | Action             |
-| --------- | ------------------ |
-| `j` / `↓` | Next issue         |
-| `k` / `↑` | Previous issue     |
-| `Enter`   | Open detail        |
-| `c`       | Copy issue ID      |
-| `p`       | Set priority (0-4) |
-| `a`       | AI menu            |
-| `x`       | Close issue        |
-| `q`       | Quit               |
-
-### AI Menu (after `a`)
-
-| Key | Action         |
-| --- | -------------- |
-| `e` | Enrich         |
-| `i` | Implement      |
-| `s` | Split to tasks |
-
-### Issue Detail / Child Detail
-
-| Key   | Action              |
-| ----- | ------------------- |
-| `Esc` | Back                |
-| `j/k` | Scroll              |
-| `c`   | Copy issue ID       |
-| `p`   | Copy worktree path  |
-| `e`   | Edit (open $EDITOR) |
-| `a`   | AI menu             |
-| `m`   | Merge impl          |
-| `d`   | Discard impl        |
-| `x`   | Close issue         |
-
-### Epic Detail
-
-| Key     | Action                                          |
-| ------- | ----------------------------------------------- |
-| `Esc`   | Back                                            |
-| `j/k`   | Select child                                    |
-| `Enter` | Open child detail                               |
-| `c`     | Copy issue ID                                   |
-| `e`     | Edit epic                                       |
-| `a`     | AI menu                                         |
-| `m`     | Merge epic to master (when all children closed) |
-| `x`     | Close                                           |
-
-## Status Icons
-
-| Icon | Meaning        |
-| ---- | -------------- |
-| `⚡` | Impl running   |
-| `✓`  | Done / Closed  |
-| `✗`  | Failed         |
-| `⟳`  | Enriching      |
-| `●`  | Unread         |
-| `○`  | Ready to merge |
-| `·`  | Pending        |
-
-## Development Sandbox
-
-```bash
-bash scripts/setup-sandbox.sh
-cargo run -- --dir /tmp/strand-sandbox
-```
-
-## Git Branch Strategy
-
-```
-master ──────────────────────────────────────→
-  │                                ↑
-  └── epic/{epic_id} ───────────→ merge (m key)
-        │          ↑      ↑
-        ├── impl/{child_1} → merge (m key)
-        └── impl/{child_2} → merge (m key)
-
-master ──────────────────────────────────────→
-  │                    ↑
-  └── impl/{issue_id} → merge (m key)   ← standalone
-```
+From the TUI, press `a` to open the AI menu — enrich, split, or implement any issue.
