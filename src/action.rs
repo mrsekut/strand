@@ -56,6 +56,8 @@ pub enum AppAction {
     // ── Filter ──
     SetFilter(FilterChange),
     ClearFilter,
+    OpenFilterStatusToggle,
+    OpenFilterLabelToggle,
 
     // ── System ──
     Notify(String),

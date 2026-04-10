@@ -87,9 +87,12 @@ pub fn keybar_line(keys: &[(&str, &str)]) -> Line<'static> {
 }
 
 /// ExecuteSelector用: キーバー風セレクタ。カーソル位置をハイライト。
-pub fn execute_selector_line(items: &[(&str, &str)], cursor: usize) -> Line<'static> {
+pub fn execute_selector_line(
+    items: &[crate::action::SelectorItem],
+    cursor: usize,
+) -> Line<'static> {
     let mut spans = vec![Span::raw(" ")];
-    for (i, (key, desc)) in items.iter().enumerate() {
+    for (i, item) in items.iter().enumerate() {
         if i > 0 {
             spans.push(Span::raw("  "));
         }
@@ -111,8 +114,8 @@ pub fn execute_selector_line(items: &[(&str, &str)], cursor: usize) -> Line<'sta
                 Style::default().fg(Color::DarkGray),
             )
         };
-        spans.push(Span::styled(key.to_string(), key_style));
-        spans.push(Span::styled(format!(" {desc}"), desc_style));
+        spans.push(Span::styled(item.shortcut.clone(), key_style));
+        spans.push(Span::styled(format!(" {}", item.label), desc_style));
     }
     Line::from(spans)
 }

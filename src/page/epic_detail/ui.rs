@@ -6,8 +6,9 @@ use ratatui::{
 };
 
 use crate::ai::implement::ImplStatus;
-use crate::app::{App, InputMode, View};
+use crate::app::{App, View};
 use crate::bd;
+use crate::overlay::Overlay;
 use crate::ui::{
     draw_notification, execute_selector_line, format_timestamp, padded_keybar_line, priority_style,
     status_style, toggle_selector_line,
@@ -163,20 +164,11 @@ pub fn draw(frame: &mut Frame, app: &App) {
 }
 
 fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
-    let line = match app.input_mode {
-        InputMode::Selecting => {
-            if let Some(sel) = &app.execute_selector {
-                execute_selector_line(sel.items, sel.cursor)
-            } else if let Some(sel) = &app.toggle_selector {
-                toggle_selector_line(&sel.items, sel.cursor)
-            } else {
-                padded_keybar_line(&[])
-            }
-        }
-        InputMode::AwaitingConfirm(action) => {
-            padded_keybar_line(&[("y", action.label()), ("n", "cancel")])
-        }
-        _ => {
+    let line = match &app.overlay {
+        Overlay::Selector(sel) => execute_selector_line(&sel.items, sel.cursor),
+        Overlay::ToggleSelector(sel) => toggle_selector_line(&sel.items, sel.cursor),
+        Overlay::Confirm(action) => padded_keybar_line(&[("y", action.label()), ("n", "cancel")]),
+        Overlay::None => {
             let mut keys = vec![
                 ("Enter", "open issue"),
                 ("Esc", "back"),

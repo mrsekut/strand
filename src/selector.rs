@@ -1,40 +1,21 @@
 use crossterm::event::KeyCode;
 
-/// セレクタが何を選択しているかの種別
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SelectTarget {
-    AI,
-    Status,
-    Priority,
-    FilterMenu,
-}
+use crate::action::{AppAction, SelectorDef, SelectorItem};
 
 /// 「選択して実行」型セレクタ。Enterで選択、モードを抜ける。
+/// SelectorDef から生成され、各選択肢に対応する AppAction を持つ。
+/// Selector 自身は App を知らない — 選ばれた Action を返すだけ。
 pub struct ExecuteSelector {
-    pub target: SelectTarget,
-    /// (shortcut_key, label)
-    pub items: &'static [(&'static str, &'static str)],
+    pub items: Vec<SelectorItem>,
     pub cursor: usize,
 }
 
 impl ExecuteSelector {
-    pub fn new(target: SelectTarget, items: &'static [(&'static str, &'static str)]) -> Self {
+    pub fn from_def(def: SelectorDef) -> Self {
+        let cursor = def.initial_cursor.min(def.items.len().saturating_sub(1));
         Self {
-            target,
-            items,
-            cursor: 0,
-        }
-    }
-
-    pub fn with_cursor(
-        target: SelectTarget,
-        items: &'static [(&'static str, &'static str)],
-        cursor: usize,
-    ) -> Self {
-        Self {
-            target,
-            items,
-            cursor: cursor.min(items.len().saturating_sub(1)),
+            items: def.items,
+            cursor,
         }
     }
 
@@ -48,40 +29,40 @@ impl ExecuteSelector {
         }
     }
 
-    /// キー入力を処理。選択されたindex を返す（モードを抜けるべき）。
-    /// None なら未確定（カーソル移動等）。
-    pub fn handle_key(&mut self, key: KeyCode) -> ExecuteResult {
+    /// キー入力を処理。App を触らない。結果を返すだけ。
+    pub fn handle_key(&mut self, key: KeyCode) -> SelectorResult {
         match key {
             KeyCode::Left | KeyCode::Char('h') => {
                 self.move_left();
-                ExecuteResult::Continue
+                SelectorResult::Continue
             }
             KeyCode::Right | KeyCode::Char('l') => {
                 self.move_right();
-                ExecuteResult::Continue
+                SelectorResult::Continue
             }
-            KeyCode::Enter | KeyCode::Char(' ') => ExecuteResult::Selected(self.cursor),
-            KeyCode::Esc => ExecuteResult::Cancelled,
-            // ショートカットキーのチェック
+            KeyCode::Enter | KeyCode::Char(' ') => {
+                SelectorResult::Selected(self.items[self.cursor].action.clone())
+            }
+            KeyCode::Esc => SelectorResult::Cancelled,
             KeyCode::Char(c) => {
-                let c_str = &c.to_string();
-                for (i, (key, _)) in self.items.iter().enumerate() {
-                    if *key == c_str {
-                        return ExecuteResult::Selected(i);
-                    }
+                let c_str = c.to_string();
+                if let Some(item) = self.items.iter().find(|item| item.shortcut == c_str) {
+                    SelectorResult::Selected(item.action.clone())
+                } else {
+                    SelectorResult::Continue
                 }
-                ExecuteResult::Continue
             }
-            _ => ExecuteResult::Continue,
+            _ => SelectorResult::Continue,
         }
     }
 }
 
-pub enum ExecuteResult {
+/// Selector がキー入力を処理した結果。App を知らない。
+pub enum SelectorResult {
     /// カーソル移動等、まだ確定していない
     Continue,
-    /// index番目が選択された
-    Selected(usize),
+    /// 確定。この Action を emit する。
+    Selected(AppAction),
     /// Escでキャンセル
     Cancelled,
 }
@@ -164,55 +145,48 @@ pub enum ToggleResult {
     Done,
 }
 
-// --- プリセット定義 ---
-
-pub const AI_ITEMS: &[(&str, &str)] = &[("e", "enrich"), ("i", "implement"), ("s", "split")];
-
-pub const STATUS_ITEMS: &[(&str, &str)] = &[
-    ("o", "open"),
-    ("p", "in_progress"),
-    ("d", "deferred"),
-    ("c", "closed"),
-];
-
-pub const PRIORITY_ITEMS: &[(&str, &str)] = &[
-    ("0", "P0"),
-    ("1", "P1"),
-    ("2", "P2"),
-    ("3", "P3"),
-    ("4", "P4"),
-];
-
-pub const FILTER_MENU_ITEMS: &[(&str, &str)] = &[("s", "status"), ("l", "label"), ("c", "clear")];
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn test_selector(items: &[(&str, &str)]) -> ExecuteSelector {
+        ExecuteSelector::from_def(SelectorDef {
+            items: items
+                .iter()
+                .map(|(s, l)| SelectorItem {
+                    shortcut: s.to_string(),
+                    label: l.to_string(),
+                    action: AppAction::Notify(l.to_string()),
+                })
+                .collect(),
+            initial_cursor: 0,
+        })
+    }
+
     #[test]
     fn execute_selector_shortcut() {
-        let mut sel = ExecuteSelector::new(SelectTarget::AI, AI_ITEMS);
+        let mut sel = test_selector(&[("e", "enrich"), ("i", "implement"), ("s", "split")]);
         assert!(matches!(
             sel.handle_key(KeyCode::Char('i')),
-            ExecuteResult::Selected(1)
+            SelectorResult::Selected(AppAction::Notify(ref s)) if s == "implement"
         ));
     }
 
     #[test]
     fn execute_selector_cursor_move_and_enter() {
-        let mut sel = ExecuteSelector::new(SelectTarget::AI, AI_ITEMS);
+        let mut sel = test_selector(&[("e", "enrich"), ("i", "implement"), ("s", "split")]);
         sel.handle_key(KeyCode::Right);
         sel.handle_key(KeyCode::Right);
         assert_eq!(sel.cursor, 2);
         assert!(matches!(
             sel.handle_key(KeyCode::Enter),
-            ExecuteResult::Selected(2)
+            SelectorResult::Selected(AppAction::Notify(ref s)) if s == "split"
         ));
     }
 
     #[test]
     fn execute_selector_cursor_clamp() {
-        let mut sel = ExecuteSelector::new(SelectTarget::AI, AI_ITEMS);
+        let mut sel = test_selector(&[("e", "enrich"), ("i", "implement"), ("s", "split")]);
         sel.handle_key(KeyCode::Left);
         assert_eq!(sel.cursor, 0);
         for _ in 0..10 {

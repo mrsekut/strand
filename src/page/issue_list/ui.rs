@@ -3,16 +3,17 @@ use ratatui::{
     widgets::{Cell, Paragraph, Row, Table, TableState},
 };
 
-use crate::app::{App, InputMode};
+use crate::app::App;
 use crate::bd;
+use crate::overlay::Overlay;
 use crate::ui::{
     draw_notification, epic_icon, execute_selector_line, padded_keybar_line, priority_style,
     toggle_selector_line,
 };
 
 pub fn draw(frame: &mut Frame, app: &App) {
-    let has_indicator = app.filter.is_active()
-        && !matches!(app.input_mode, InputMode::Selecting if app.toggle_selector.is_some());
+    let has_indicator =
+        app.filter.is_active() && !matches!(app.overlay, Overlay::ToggleSelector(_));
 
     let mut constraints = vec![Constraint::Min(1)]; // table
     if has_indicator {
@@ -89,20 +90,11 @@ pub fn draw(frame: &mut Frame, app: &App) {
 }
 
 fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
-    let line = match app.input_mode {
-        InputMode::Selecting => {
-            if let Some(sel) = &app.execute_selector {
-                execute_selector_line(sel.items, sel.cursor)
-            } else if let Some(sel) = &app.toggle_selector {
-                toggle_selector_line(&sel.items, sel.cursor)
-            } else {
-                padded_keybar_line(&[])
-            }
-        }
-        InputMode::AwaitingConfirm(action) => {
-            padded_keybar_line(&[("y", action.label()), ("n", "cancel")])
-        }
-        InputMode::Normal => {
+    let line = match &app.overlay {
+        Overlay::Selector(sel) => execute_selector_line(&sel.items, sel.cursor),
+        Overlay::ToggleSelector(sel) => toggle_selector_line(&sel.items, sel.cursor),
+        Overlay::Confirm(action) => padded_keybar_line(&[("y", action.label()), ("n", "cancel")]),
+        Overlay::None => {
             if app.filter.is_active() {
                 padded_keybar_line(&[
                     ("Enter", "detail"),

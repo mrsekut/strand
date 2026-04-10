@@ -11,7 +11,7 @@ use crate::ai::implement::{self, ImplManager, ImplOutcome, ImplStatus};
 use crate::ai::split::{self, SplitManager, SplitOutcome};
 use crate::bd::{self, Issue};
 use crate::filter::Filter;
-use crate::selector::{ExecuteSelector, ToggleSelector};
+use crate::overlay::Overlay;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfirmAction {
@@ -30,13 +30,6 @@ impl ConfirmAction {
             ConfirmAction::Retry => "confirm retry",
         }
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum InputMode {
-    Normal,
-    Selecting,
-    AwaitingConfirm(ConfirmAction),
 }
 
 #[derive(Debug)]
@@ -70,10 +63,8 @@ pub struct App {
     pub split_rx: mpsc::Receiver<split::SplitEvent>,
     pub notification: Option<(String, Instant)>,
     pub last_db_mtime: Option<SystemTime>,
-    pub input_mode: InputMode,
+    pub overlay: Overlay,
     pub filter: Filter,
-    pub execute_selector: Option<ExecuteSelector>,
-    pub toggle_selector: Option<ToggleSelector>,
 }
 
 impl App {
@@ -95,10 +86,8 @@ impl App {
             split_rx,
             notification: None,
             last_db_mtime: None,
-            input_mode: InputMode::Normal,
+            overlay: Overlay::None,
             filter: Filter::new(),
-            execute_selector: None,
-            toggle_selector: None,
         }
     }
 
@@ -142,7 +131,10 @@ impl App {
         if !self.filter.is_active() {
             self.issues.iter().collect()
         } else {
-            self.issues.iter().filter(|i| self.filter.matches(i)).collect()
+            self.issues
+                .iter()
+                .filter(|i| self.filter.matches(i))
+                .collect()
         }
     }
 
@@ -310,9 +302,7 @@ impl App {
 
         // 親viewのselectedも更新
         match self.view_stack.last_mut() {
-            Some(View::EpicDetail {
-                child_selected, ..
-            }) => {
+            Some(View::EpicDetail { child_selected, .. }) => {
                 *child_selected = new_idx;
             }
             _ => {
@@ -444,7 +434,7 @@ impl App {
     }
 
     /// スタックを遡って直近のEpicDetailのepic_idを探す
-    fn find_parent_epic_id(&self) -> Option<String> {
+    pub fn find_parent_epic_id(&self) -> Option<String> {
         for view in self.view_stack.iter().rev() {
             if let View::EpicDetail { epic_id, .. } = view {
                 return Some(epic_id.clone());
