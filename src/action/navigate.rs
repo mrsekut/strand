@@ -1,5 +1,5 @@
+use crate::ai::AiManagers;
 use crate::ai::implement::{self, ImplStatus};
-use crate::app::App;
 use crate::bd;
 use crate::core::{Core, View};
 
@@ -49,21 +49,15 @@ pub fn back(core: &mut Core) {
     }
 }
 
-// TODO: impl_manager が必要なため &mut App を取る（manager 集約後に再検討）
-pub async fn open_detail(app: &mut App) {
-    let Some(issue) = app.core.issue_store.selected_issue(&app.core.filter) else {
+pub async fn open_detail(core: &mut Core, ai: &AiManagers) {
+    let Some(issue) = core.issue_store.selected_issue(&core.filter) else {
         return;
     };
     let issue_id = issue.id.clone();
 
     // Clear unread label
     if issue.labels.contains(&"strand-unread".to_string()) {
-        if let Some(issue) = app
-            .core
-            .issue_store
-            .issues
-            .get_mut(app.core.issue_store.selected)
-        {
+        if let Some(issue) = core.issue_store.issues.get_mut(core.issue_store.selected) {
             issue.labels.retain(|l| l != "strand-unread");
         }
         let id = issue_id.clone();
@@ -72,12 +66,11 @@ pub async fn open_detail(app: &mut App) {
         });
     }
 
-    push_view_for_issue(app, &issue_id).await;
+    push_view_for_issue(core, ai, &issue_id).await;
 }
 
-// TODO: impl_manager が必要なため &mut App を取る（manager 集約後に再検討）
-pub async fn open_child_detail(app: &mut App) {
-    let issue_id = match &app.core.view {
+pub async fn open_child_detail(core: &mut Core, ai: &AiManagers) {
+    let issue_id = match &core.view {
         View::EpicDetail {
             children,
             child_selected,
@@ -87,17 +80,16 @@ pub async fn open_child_detail(app: &mut App) {
     };
     let Some(issue_id) = issue_id else { return };
 
-    push_view_for_issue(app, &issue_id).await;
+    push_view_for_issue(core, ai, &issue_id).await;
 }
 
-// TODO: impl_manager が必要なため &mut App を取る（manager 集約後に再検討）
-pub async fn navigate_issue(app: &mut App, forward: bool) {
-    let View::IssueDetail { issue_id, .. } = &app.core.view else {
+pub async fn navigate_issue(core: &mut Core, ai: &AiManagers, forward: bool) {
+    let View::IssueDetail { issue_id, .. } = &core.view else {
         return;
     };
     let current_id = issue_id.clone();
 
-    let parent = app.core.view_stack.last();
+    let parent = core.view_stack.last();
     let (issues, selected_idx) = match parent {
         Some(View::EpicDetail {
             children,
@@ -111,14 +103,13 @@ pub async fn navigate_issue(app: &mut App, forward: bool) {
             (children.clone(), idx)
         }
         _ => {
-            let idx = app
-                .core
+            let idx = core
                 .issue_store
                 .issues
                 .iter()
                 .position(|i| i.id == current_id)
-                .unwrap_or(app.core.issue_store.selected);
-            (app.core.issue_store.issues.clone(), idx)
+                .unwrap_or(core.issue_store.selected);
+            (core.issue_store.issues.clone(), idx)
         }
     };
 
@@ -138,12 +129,12 @@ pub async fn navigate_issue(app: &mut App, forward: bool) {
 
     let new_issue_id = issues[new_idx].id.clone();
 
-    match app.core.view_stack.last_mut() {
+    match core.view_stack.last_mut() {
         Some(View::EpicDetail { child_selected, .. }) => {
             *child_selected = new_idx;
         }
         _ => {
-            app.core.issue_store.selected = new_idx;
+            core.issue_store.selected = new_idx;
         }
     }
 
@@ -152,17 +143,17 @@ pub async fn navigate_issue(app: &mut App, forward: bool) {
         .unwrap_or_default();
 
     if children.is_empty() {
-        app.core.view = View::IssueDetail {
+        core.view = View::IssueDetail {
             issue_id: new_issue_id.clone(),
             scroll_offset: 0,
             diff: None,
         };
-        load_issue_detail_diff(app, &new_issue_id).await;
+        load_issue_detail_diff(core, ai, &new_issue_id).await;
     } else {
         let ready_ids = bd::list_ready_ids(None, &new_issue_id)
             .await
             .unwrap_or_default();
-        app.core.view = View::EpicDetail {
+        core.view = View::EpicDetail {
             epic_id: new_issue_id,
             children,
             ready_ids,
@@ -195,22 +186,22 @@ pub async fn reload_children(core: &mut Core) {
 
 // --- private helpers ---
 
-async fn push_view_for_issue(app: &mut App, issue_id: &str) {
+async fn push_view_for_issue(core: &mut Core, ai: &AiManagers, issue_id: &str) {
     let children = bd::list_children(None, issue_id).await.unwrap_or_default();
 
-    let old = std::mem::replace(&mut app.core.view, View::IssueList);
-    app.core.view_stack.push(old);
+    let old = std::mem::replace(&mut core.view, View::IssueList);
+    core.view_stack.push(old);
 
     if children.is_empty() {
-        app.core.view = View::IssueDetail {
+        core.view = View::IssueDetail {
             issue_id: issue_id.to_string(),
             scroll_offset: 0,
             diff: None,
         };
-        load_issue_detail_diff(app, issue_id).await;
+        load_issue_detail_diff(core, ai, issue_id).await;
     } else {
         let ready_ids = bd::list_ready_ids(None, issue_id).await.unwrap_or_default();
-        app.core.view = View::EpicDetail {
+        core.view = View::EpicDetail {
             epic_id: issue_id.to_string(),
             children,
             ready_ids,
@@ -220,10 +211,10 @@ async fn push_view_for_issue(app: &mut App, issue_id: &str) {
     }
 }
 
-async fn load_issue_detail_diff(app: &mut App, issue_id: &str) {
-    rebase_impl(app, issue_id).await;
-    let computed = compute_diff(app, issue_id).await;
-    match &mut app.core.view {
+async fn load_issue_detail_diff(core: &mut Core, ai: &AiManagers, issue_id: &str) {
+    rebase_impl(core, ai, issue_id).await;
+    let computed = compute_diff(core, ai, issue_id).await;
+    match &mut core.view {
         View::IssueDetail { diff, .. } => {
             *diff = computed;
         }
@@ -231,21 +222,20 @@ async fn load_issue_detail_diff(app: &mut App, issue_id: &str) {
     }
 }
 
-async fn rebase_impl(app: &mut App, issue_id: &str) {
-    let Some(job) = app.impl_manager.get_job(issue_id) else {
+async fn rebase_impl(core: &mut Core, ai: &AiManagers, issue_id: &str) {
+    let Some(job) = ai.impl_.get_job(issue_id) else {
         return;
     };
     if !matches!(job.status, ImplStatus::Done) {
         return;
     }
     let wt_path = job.worktree_path.clone();
-    let base = target_branch_for(&app.core, issue_id);
+    let base = target_branch_for(core, issue_id);
 
     match implement::worktree::rebase_impl_branch(&wt_path, &base).await {
         Ok(_) => {}
         Err(e) => {
-            app.core
-                .notify(format!("Rebase failed (retry recommended): {e}"));
+            core.notify(format!("Rebase failed (retry recommended): {e}"));
         }
     }
 }
@@ -256,8 +246,8 @@ fn target_branch_for(core: &Core, _issue_id: &str) -> String {
         .unwrap_or_else(|| "master".to_string())
 }
 
-async fn compute_diff(app: &App, issue_id: &str) -> Option<Vec<u8>> {
-    let Some(job) = app.impl_manager.get_job(issue_id) else {
+async fn compute_diff(core: &Core, ai: &AiManagers, issue_id: &str) -> Option<Vec<u8>> {
+    let Some(job) = ai.impl_.get_job(issue_id) else {
         return None;
     };
     if !matches!(job.status, ImplStatus::Done) {
@@ -267,7 +257,7 @@ async fn compute_diff(app: &App, issue_id: &str) -> Option<Vec<u8>> {
     let branch = job.branch.clone();
     let repo_dir = Core::repo_dir();
 
-    let base = target_branch_for(&app.core, issue_id);
+    let base = target_branch_for(core, issue_id);
     let range = format!("{base}..{branch}");
 
     let output = tokio::process::Command::new("sh")

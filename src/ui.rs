@@ -2,19 +2,14 @@ use ratatui::{prelude::*, widgets::Paragraph};
 
 use chrono::{DateTime, FixedOffset};
 
-use crate::ai::enrich::EnrichManager;
-use crate::ai::implement::{ImplManager, ImplStatus};
+use crate::ai::AiManagers;
+use crate::ai::implement::ImplStatus;
 use crate::bd::Issue;
 use crate::core::{Core, View};
 use crate::page;
 use crate::widget::keybar::KeyBar;
 
-pub fn draw(
-    frame: &mut Frame,
-    core: &Core,
-    impl_manager: &ImplManager,
-    enrich_manager: &EnrichManager,
-) {
+pub fn draw(frame: &mut Frame, core: &Core, ai: &AiManagers) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -26,15 +21,9 @@ pub fn draw(
 
     // ページコンテンツ
     match &core.view {
-        View::IssueList => {
-            page::issue_list::ui::draw(frame, core, impl_manager, enrich_manager, chunks[0])
-        }
-        View::IssueDetail { .. } => {
-            page::issue_detail::ui::draw(frame, core, impl_manager, chunks[0])
-        }
-        View::EpicDetail { .. } => {
-            page::epic_detail::ui::draw(frame, core, impl_manager, chunks[0])
-        }
+        View::IssueList => page::issue_list::ui::draw(frame, core, ai, chunks[0]),
+        View::IssueDetail { .. } => page::issue_detail::ui::draw(frame, core, &ai.impl_, chunks[0]),
+        View::EpicDetail { .. } => page::epic_detail::ui::draw(frame, core, &ai.impl_, chunks[0]),
     }
 
     // KeyBar
@@ -43,7 +32,7 @@ pub fn draw(
             let line = match &core.view {
                 View::IssueList => page::issue_list::ui::key_hints(core),
                 View::IssueDetail { .. } => page::issue_detail::ui::key_hints(),
-                View::EpicDetail { .. } => page::epic_detail::ui::key_hints(core, impl_manager),
+                View::EpicDetail { .. } => page::epic_detail::ui::key_hints(core, &ai.impl_),
             };
             frame.render_widget(Paragraph::new(line), chunks[1]);
         }
@@ -83,12 +72,8 @@ pub fn status_style(status: &str) -> Style {
     }
 }
 
-pub fn epic_icon(
-    impl_manager: &ImplManager,
-    enrich_manager: &EnrichManager,
-    issue: &Issue,
-) -> (&'static str, Style) {
-    if let Some(job) = impl_manager.get_job(&issue.id) {
+pub fn epic_icon(ai: &AiManagers, issue: &Issue) -> (&'static str, Style) {
+    if let Some(job) = ai.impl_.get_job(&issue.id) {
         return match &job.status {
             ImplStatus::Running => ("⚡", Style::default().fg(Color::Magenta)),
             ImplStatus::Done => ("✓", Style::default().fg(Color::Green)),
@@ -96,7 +81,7 @@ pub fn epic_icon(
             ImplStatus::Interrupted => ("⚠", Style::default().fg(Color::Yellow)),
         };
     }
-    if enrich_manager.is_enriching(&issue.id) {
+    if ai.enrich.is_enriching(&issue.id) {
         return ("⟳", Style::default().fg(Color::Yellow));
     }
     if issue.labels.contains(&"strand-unread".to_string()) {

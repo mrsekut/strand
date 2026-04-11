@@ -48,8 +48,16 @@ async fn main() -> Result<()> {
 
     let mut app = App::new();
     app.core.load_issues().await?;
-    app.restore_impl_jobs().await;
-    action::ai::auto_enrich(&mut app);
+    let repo_dir = core::Core::repo_dir();
+    let issue_ids: Vec<String> = app
+        .core
+        .issue_store
+        .issues
+        .iter()
+        .map(|i| i.id.clone())
+        .collect();
+    app.ai.restore_impl_jobs(&repo_dir, &issue_ids).await;
+    action::ai::auto_enrich(&app.core, &mut app.ai);
 
     enable_raw_mode()?;
     stdout().execute(EnterAlternateScreen)?;
@@ -132,8 +140,7 @@ async fn run(
     poll_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
     loop {
-        terminal
-            .draw(|frame| ui::draw(frame, &app.core, &app.impl_manager, &app.enrich_manager))?;
+        terminal.draw(|frame| ui::draw(frame, &app.core, &app.ai))?;
 
         tokio::select! {
             maybe_event = event_stream.next() => {
@@ -153,18 +160,18 @@ async fn run(
                 }
             }
             Some(event) = app.enrich_rx.recv() => {
-                action::ai::handle_enrich_event(app, event).await;
+                action::ai::handle_enrich_event(&mut app.core, &mut app.ai, event).await;
             }
             Some(event) = app.impl_rx.recv() => {
-                action::ai::handle_impl_event(app, event);
+                action::ai::handle_impl_event(&mut app.core, &mut app.ai, event);
             }
             Some(event) = app.split_rx.recv() => {
-                action::ai::handle_split_event(app, event).await;
+                action::ai::handle_split_event(&mut app.core, &mut app.ai, event).await;
             }
             _ = poll_interval.tick() => {
                 if app.core.has_db_changed() {
                     let _ = app.core.load_issues().await;
-                    action::ai::auto_enrich(app);
+                    action::ai::auto_enrich(&app.core, &mut app.ai);
                     action::navigate::reload_children(&mut app.core).await;
                 }
             }

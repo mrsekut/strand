@@ -3,20 +3,13 @@ use ratatui::{
     widgets::{Cell, Paragraph, Row, Table, TableState},
 };
 
-use crate::ai::enrich::EnrichManager;
-use crate::ai::implement::ImplManager;
+use crate::ai::AiManagers;
 use crate::bd;
 use crate::core::Core;
 use crate::ui::{epic_icon, padded_keybar_line, priority_style};
 use crate::widget::keybar::KeyBar;
 
-pub fn draw(
-    frame: &mut Frame,
-    core: &Core,
-    impl_manager: &ImplManager,
-    enrich_manager: &EnrichManager,
-    area: Rect,
-) {
+pub fn draw(frame: &mut Frame, core: &Core, ai: &AiManagers, area: Rect) {
     let has_indicator = core.filter.is_active() && !matches!(core.keybar, KeyBar::Toggle(_));
 
     let constraints: Vec<Constraint> = if has_indicator {
@@ -38,7 +31,7 @@ pub fn draw(
     let rows: Vec<Row> = displayed
         .iter()
         .map(|issue| {
-            let (icon, icon_style) = epic_icon(impl_manager, enrich_manager, issue);
+            let (icon, icon_style) = epic_icon(ai, issue);
             let priority_text = issue.priority.map(|p| format!("P{p}")).unwrap_or_default();
             Row::new(vec![
                 Cell::from(icon).style(icon_style),
