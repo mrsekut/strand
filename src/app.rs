@@ -256,53 +256,6 @@ impl App {
         self.start_implement(issue_id, epic_id.as_deref()).await;
     }
 
-    // --- Set Status ---
-
-    pub async fn set_status(&mut self, issue_id: &str, status: &str) {
-        if status == "closed" {
-            match bd::close_issue(self.dir.as_deref(), issue_id).await {
-                Ok(_) => {
-                    self.notify(format!("Closed: {issue_id}"));
-                    let _ = self.load_issues().await;
-                    crate::action::navigate::reload_children(self).await;
-                    if self.core.issue_store.selected >= self.core.issue_store.issues.len()
-                        && self.core.issue_store.selected > 0
-                    {
-                        self.core.issue_store.selected -= 1;
-                    }
-                }
-                Err(e) => {
-                    self.notify(format!("Status change failed: {e}"));
-                }
-            }
-        } else {
-            match bd::update_status(self.dir.as_deref(), issue_id, status).await {
-                Ok(_) => {
-                    self.notify(format!("Status: {issue_id} → {status}"));
-                    let _ = self.load_issues().await;
-                    crate::action::navigate::reload_children(self).await;
-                }
-                Err(e) => {
-                    self.notify(format!("Status change failed: {e}"));
-                }
-            }
-        }
-    }
-
-    // --- Set Priority ---
-
-    pub async fn set_priority(&mut self, issue_id: &str, priority: u8) {
-        match bd::update_priority(self.dir.as_deref(), issue_id, priority).await {
-            Ok(_) => {
-                self.notify(format!("Priority set: {issue_id} → P{priority}"));
-                let _ = self.load_issues().await;
-            }
-            Err(e) => {
-                self.notify(format!("Priority update failed: {e}"));
-            }
-        }
-    }
-
     // --- Copy ---
 
     pub fn copy_resume_command(&mut self, issue_id: &str) {
@@ -580,13 +533,13 @@ impl App {
 
             // ── State changes ──
             AppAction::SetStatus { issue_id, status } => {
-                self.set_status(&issue_id, &status).await;
+                crate::action::state::set_status(self, &issue_id, &status).await;
                 if status == "closed" && matches!(&self.core.view, View::IssueDetail { .. }) {
                     crate::action::navigate::back(&mut self.core);
                 }
             }
             AppAction::SetPriority { issue_id, priority } => {
-                self.set_priority(&issue_id, priority).await;
+                crate::action::state::set_priority(self, &issue_id, priority).await;
             }
 
             // ── Editor ──
