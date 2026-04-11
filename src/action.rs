@@ -15,15 +15,12 @@ pub enum AppAction {
         forward: bool,
     },
 
-    // ── Overlay（セレクタ・確認） ──
+    // ── KeyBar（セレクタ・確認） ──
     OpenSelector(SelectorDef),
     OpenConfirm(ConfirmAction),
-    CloseOverlay,
-    Confirm(ConfirmAction),
-
-    // ── KeyBar ──
     CloseKeyBar,
     SyncFilter,
+    Confirm(ConfirmAction),
 
     // ── AI workflows ──
     StartEnrich(String),

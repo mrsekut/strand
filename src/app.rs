@@ -778,7 +778,49 @@ impl App {
         self.core.all_children_closed()
     }
 
-    /// AppAction を処理する。全操作のディスパッチャ。
+    // --- Filter ---
+
+    fn sync_keybar_to_filter(&mut self) {
+        use crate::widget::keybar::ToggleTarget;
+        if let KeyBar::Toggle(sel) = &self.core.keybar {
+            let selected: std::collections::HashSet<String> = sel
+                .selected_labels()
+                .into_iter()
+                .map(|s| s.to_string())
+                .collect();
+            match sel.target {
+                ToggleTarget::FilterStatus => self.core.filter.statuses = selected,
+                ToggleTarget::FilterLabel => self.core.filter.labels = selected,
+            }
+        }
+        self.core.issue_store.selected = 0;
+    }
+
+    fn open_filter_status_toggle(&mut self) {
+        use crate::widget::keybar::{ToggleSelector, ToggleTarget};
+        let items: Vec<(String, bool)> = crate::core::STATUSES
+            .iter()
+            .map(|s| (s.to_string(), self.core.filter.statuses.contains(*s)))
+            .collect();
+        self.core.keybar = KeyBar::Toggle(ToggleSelector::new(ToggleTarget::FilterStatus, items));
+    }
+
+    fn open_filter_label_toggle(&mut self) {
+        use crate::widget::keybar::{ToggleSelector, ToggleTarget};
+        self.core
+            .filter
+            .refresh_labels(&self.core.issue_store.issues);
+        let items: Vec<(String, bool)> = self
+            .core
+            .filter
+            .available_labels
+            .iter()
+            .map(|l| (l.clone(), self.core.filter.labels.contains(l)))
+            .collect();
+        self.core.keybar = KeyBar::Toggle(ToggleSelector::new(ToggleTarget::FilterLabel, items));
+    }
+
+    /// AppAction を処理する。全操作のディスパッチ���。
     pub async fn process_action(
         &mut self,
         action: crate::action::AppAction,
@@ -804,12 +846,12 @@ impl App {
                     Some((confirm.confirm_message().into(), std::time::Instant::now()));
                 self.core.keybar = KeyBar::Confirm(confirm);
             }
-            AppAction::CloseOverlay | AppAction::CloseKeyBar => {
+            AppAction::CloseKeyBar => {
                 self.core.keybar = KeyBar::Default;
                 self.core.notification = None;
             }
             AppAction::SyncFilter => {
-                // handle_overlay_key 内で処理済み（3-3 で process_action に移動）
+                self.sync_keybar_to_filter();
             }
             AppAction::Confirm(confirm) => {
                 let issue_id = self.current_issue_id().unwrap_or_default();
@@ -868,8 +910,8 @@ impl App {
                 self.core.filter.clear();
                 self.core.issue_store.selected = 0;
             }
-            AppAction::OpenFilterStatusToggle => crate::overlay::open_filter_status_toggle(self),
-            AppAction::OpenFilterLabelToggle => crate::overlay::open_filter_label_toggle(self),
+            AppAction::OpenFilterStatusToggle => self.open_filter_status_toggle(),
+            AppAction::OpenFilterLabelToggle => self.open_filter_label_toggle(),
 
             // ── System ──
             AppAction::Notify(msg) => self.notify(msg),

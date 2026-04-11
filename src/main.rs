@@ -5,9 +5,7 @@ mod bd;
 mod clipboard;
 mod core;
 mod editor;
-mod overlay;
 mod page;
-mod selector;
 mod ui;
 mod widget;
 
@@ -149,12 +147,11 @@ async fn run(
                         if key.code == KeyCode::Char('c') && key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) {
                             break;
                         }
-                        // Overlay が先にキーを消費
-                        let outcome = overlay::handle_overlay_key(key.code, app);
-                        let actions = match outcome {
-                            overlay::OverlayOutcome::NotConsumed => dispatch_key(key.code, app),
-                            overlay::OverlayOutcome::Consumed => vec![],
-                            overlay::OverlayOutcome::Action(action) => vec![action],
+                        // KeyBar がアクティブならキーを消費、そうでなければ page に委譲
+                        let actions = if !app.core.keybar.is_default() {
+                            app.core.keybar.handle_key(key.code)
+                        } else {
+                            dispatch_key(key.code, app)
                         };
                         for action in actions {
                             app.process_action(action, terminal).await;
