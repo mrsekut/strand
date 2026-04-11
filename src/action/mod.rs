@@ -1,3 +1,5 @@
+pub mod navigate;
+
 use crate::core::ConfirmAction;
 
 /// strand 上の全操作を表現するデータ型。

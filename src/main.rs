@@ -171,7 +171,7 @@ async fn run(
                 if app.has_db_changed() {
                     let _ = app.load_issues().await;
                     app.auto_enrich();
-                    app.reload_children().await;
+                    action::navigate::reload_children(app).await;
                 }
             }
         }

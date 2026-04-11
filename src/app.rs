@@ -5,7 +5,7 @@ use ratatui::prelude::*;
 use tokio::sync::mpsc;
 
 use crate::ai::enrich::{self, EnrichManager, EnrichOutcome};
-use crate::ai::implement::{self, ImplManager, ImplOutcome, ImplStatus};
+use crate::ai::implement::{self, ImplManager, ImplOutcome};
 use crate::ai::split::{self, SplitManager, SplitOutcome};
 use crate::bd::{self, Issue};
 use crate::core::{ConfirmAction, Core, View};
@@ -74,311 +74,6 @@ impl App {
         self.core.issue_store.displayed_issues(&self.core.filter)
     }
 
-    pub fn next(&mut self) {
-        match &mut self.core.view {
-            View::IssueList => {
-                let len = self.displayed_issues().len();
-                if len > 0 {
-                    self.core.issue_store.selected =
-                        (self.core.issue_store.selected + 1).min(len - 1);
-                }
-            }
-            View::EpicDetail {
-                children,
-                child_selected,
-                ..
-            } => {
-                if !children.is_empty() {
-                    *child_selected = (*child_selected + 1).min(children.len() - 1);
-                }
-            }
-            View::IssueDetail { scroll_offset, .. } => {
-                *scroll_offset = scroll_offset.saturating_add(1);
-            }
-        }
-    }
-
-    pub fn previous(&mut self) {
-        match &mut self.core.view {
-            View::IssueList => {
-                let len = self.displayed_issues().len();
-                if len > 0 {
-                    self.core.issue_store.selected =
-                        self.core.issue_store.selected.saturating_sub(1);
-                }
-            }
-            View::EpicDetail { child_selected, .. } => {
-                *child_selected = child_selected.saturating_sub(1);
-            }
-            View::IssueDetail { scroll_offset, .. } => {
-                *scroll_offset = scroll_offset.saturating_sub(1);
-            }
-        }
-    }
-
-    // --- Navigation ---
-
-    /// IssueListからissueを開く
-    pub async fn open_detail(&mut self) {
-        let Some(issue) = self.selected_issue() else {
-            return;
-        };
-        let issue_id = issue.id.clone();
-
-        // Clear unread label
-        if issue.labels.contains(&"strand-unread".to_string()) {
-            if let Some(issue) = self
-                .core
-                .issue_store
-                .issues
-                .get_mut(self.core.issue_store.selected)
-            {
-                issue.labels.retain(|l| l != "strand-unread");
-            }
-            let id = issue_id.clone();
-            let dir = self.dir.clone();
-            tokio::spawn(async move {
-                let _ = bd::remove_label(dir.as_deref(), &id, "strand-unread").await;
-            });
-        }
-
-        self.push_view_for_issue(&issue_id).await;
-    }
-
-    /// EpicDetailから子issueを開く
-    pub async fn open_child_detail(&mut self) {
-        let issue_id = match &self.core.view {
-            View::EpicDetail {
-                children,
-                child_selected,
-                ..
-            } => children.get(*child_selected).map(|i| i.id.clone()),
-            _ => None,
-        };
-        let Some(issue_id) = issue_id else { return };
-
-        self.push_view_for_issue(&issue_id).await;
-    }
-
-    /// issue_idに応じてIssueDetail or EpicDetailをスタックにpush
-    async fn push_view_for_issue(&mut self, issue_id: &str) {
-        let children = bd::list_children(self.dir.as_deref(), issue_id)
-            .await
-            .unwrap_or_default();
-
-        let old = std::mem::replace(&mut self.core.view, View::IssueList);
-        self.core.view_stack.push(old);
-
-        if children.is_empty() {
-            self.core.view = View::IssueDetail {
-                issue_id: issue_id.to_string(),
-                scroll_offset: 0,
-                diff: None,
-            };
-            self.load_issue_detail_diff(issue_id).await;
-        } else {
-            let ready_ids = bd::list_ready_ids(self.dir.as_deref(), issue_id)
-                .await
-                .unwrap_or_default();
-            self.core.view = View::EpicDetail {
-                epic_id: issue_id.to_string(),
-                children,
-                ready_ids,
-                child_selected: 0,
-                scroll_offset: 0,
-            };
-        }
-    }
-
-    pub fn back(&mut self) {
-        if let Some(prev) = self.core.view_stack.pop() {
-            self.core.view = prev;
-        }
-    }
-
-    /// IssueDetail内で次/前のissueに移動する
-    pub async fn navigate_issue(&mut self, forward: bool) {
-        let View::IssueDetail { issue_id, .. } = &self.core.view else {
-            return;
-        };
-        let current_id = issue_id.clone();
-
-        // view_stackの直上がEpicDetailなら子issue間を移動、IssueListならtop-level間を移動
-        let parent = self.core.view_stack.last();
-        let (issues, selected_idx) = match parent {
-            Some(View::EpicDetail {
-                children,
-                child_selected,
-                ..
-            }) => {
-                let idx = children
-                    .iter()
-                    .position(|i| i.id == current_id)
-                    .unwrap_or(*child_selected);
-                (children.clone(), idx)
-            }
-            _ => {
-                let idx = self
-                    .core
-                    .issue_store
-                    .issues
-                    .iter()
-                    .position(|i| i.id == current_id)
-                    .unwrap_or(self.core.issue_store.selected);
-                (self.core.issue_store.issues.clone(), idx)
-            }
-        };
-
-        if issues.is_empty() {
-            return;
-        }
-
-        let new_idx = if forward {
-            (selected_idx + 1).min(issues.len() - 1)
-        } else {
-            selected_idx.saturating_sub(1)
-        };
-
-        if new_idx == selected_idx {
-            return;
-        }
-
-        let new_issue_id = issues[new_idx].id.clone();
-
-        // 親viewのselectedも更新
-        match self.core.view_stack.last_mut() {
-            Some(View::EpicDetail { child_selected, .. }) => {
-                *child_selected = new_idx;
-            }
-            _ => {
-                self.core.issue_store.selected = new_idx;
-            }
-        }
-
-        // 新しいissueに切り替え（子を持つかで分岐）
-        let children = bd::list_children(self.dir.as_deref(), &new_issue_id)
-            .await
-            .unwrap_or_default();
-
-        if children.is_empty() {
-            self.core.view = View::IssueDetail {
-                issue_id: new_issue_id.clone(),
-                scroll_offset: 0,
-                diff: None,
-            };
-            self.load_issue_detail_diff(&new_issue_id).await;
-        } else {
-            let ready_ids = bd::list_ready_ids(self.dir.as_deref(), &new_issue_id)
-                .await
-                .unwrap_or_default();
-            self.core.view = View::EpicDetail {
-                epic_id: new_issue_id,
-                children,
-                ready_ids,
-                child_selected: 0,
-                scroll_offset: 0,
-            };
-        }
-    }
-
-    pub async fn reload_children(&mut self) {
-        let epic_id = match &self.core.view {
-            View::EpicDetail { epic_id, .. } => epic_id.clone(),
-            _ => return,
-        };
-        let new_children = bd::list_children(self.dir.as_deref(), &epic_id)
-            .await
-            .unwrap_or_default();
-        let new_ready = bd::list_ready_ids(self.dir.as_deref(), &epic_id)
-            .await
-            .unwrap_or_default();
-
-        match &mut self.core.view {
-            View::EpicDetail {
-                children,
-                ready_ids,
-                ..
-            } => {
-                *children = new_children;
-                *ready_ids = new_ready;
-            }
-            _ => {}
-        }
-    }
-
-    async fn load_issue_detail_diff(&mut self, issue_id: &str) {
-        self.rebase_impl(issue_id).await;
-        let computed = self.compute_diff(issue_id).await;
-        match &mut self.core.view {
-            View::IssueDetail { diff, .. } => {
-                *diff = computed;
-            }
-            _ => {}
-        }
-    }
-
-    /// impl branchをターゲットブランチにrebaseする
-    pub async fn rebase_impl(&mut self, issue_id: &str) {
-        let Some(job) = self.impl_manager.get_job(issue_id) else {
-            return;
-        };
-        if !matches!(job.status, ImplStatus::Done) {
-            return;
-        }
-        let wt_path = job.worktree_path.clone();
-        let base = self.target_branch_for(issue_id);
-
-        match implement::worktree::rebase_impl_branch(&wt_path, &base).await {
-            Ok(_) => {}
-            Err(e) => {
-                self.notify(format!("Rebase failed (retry recommended): {e}"));
-            }
-        }
-    }
-
-    /// issue_idに対するターゲットブランチ（master or epic branch）を返す
-    fn target_branch_for(&self, _issue_id: &str) -> String {
-        self.find_parent_epic_id()
-            .map(|eid| implement::epic_branch_name(&eid))
-            .unwrap_or_else(|| "master".to_string())
-    }
-
-    async fn compute_diff(&self, issue_id: &str) -> Option<Vec<u8>> {
-        let Some(job) = self.impl_manager.get_job(issue_id) else {
-            return None;
-        };
-        if !matches!(job.status, ImplStatus::Done) {
-            return None;
-        }
-
-        let branch = job.branch.clone();
-        let repo_dir = self.repo_dir();
-
-        let base = self.target_branch_for(issue_id);
-        let range = format!("{base}..{branch}");
-
-        let output = tokio::process::Command::new("sh")
-            .args([
-                "-c",
-                &format!(
-                    "git diff --stat --color=always {range} && echo && git diff --color=always {range} | $(git config core.pager || echo cat)"
-                ),
-            ])
-            .current_dir(&repo_dir)
-            .output()
-            .await;
-
-        match output {
-            Ok(out)
-                if out.status.success() && !out.stdout.iter().all(|&b| b.is_ascii_whitespace()) =>
-            {
-                Some(out.stdout)
-            }
-            _ => None,
-        }
-    }
-
-    /// スタックを遡って直近のEpicDetailのepic_idを探す
     pub fn find_parent_epic_id(&self) -> Option<String> {
         self.core.find_parent_epic_id()
     }
@@ -537,7 +232,7 @@ impl App {
 
         self.notify(format!("Merged & closed: {issue_id}"));
         let _ = self.load_issues().await;
-        self.reload_children().await;
+        crate::action::navigate::reload_children(self).await;
     }
 
     pub async fn discard_impl(&mut self, issue_id: &str) {
@@ -569,7 +264,7 @@ impl App {
                 Ok(_) => {
                     self.notify(format!("Closed: {issue_id}"));
                     let _ = self.load_issues().await;
-                    self.reload_children().await;
+                    crate::action::navigate::reload_children(self).await;
                     if self.core.issue_store.selected >= self.core.issue_store.issues.len()
                         && self.core.issue_store.selected > 0
                     {
@@ -585,7 +280,7 @@ impl App {
                 Ok(_) => {
                     self.notify(format!("Status: {issue_id} → {status}"));
                     let _ = self.load_issues().await;
-                    self.reload_children().await;
+                    crate::action::navigate::reload_children(self).await;
                 }
                 Err(e) => {
                     self.notify(format!("Status change failed: {e}"));
@@ -718,7 +413,7 @@ impl App {
                 if ok {
                     self.notify(format!("Updated: {}", edit.issue_id));
                     let _ = self.load_issues().await;
-                    self.reload_children().await;
+                    crate::action::navigate::reload_children(self).await;
                 }
             }
             Ok(None) => {} // no changes
@@ -765,7 +460,7 @@ impl App {
             }
         }
 
-        self.back();
+        crate::action::navigate::back(&mut self.core);
         let _ = self.load_issues().await;
         if self.core.issue_store.selected >= self.core.issue_store.issues.len()
             && self.core.issue_store.selected > 0
@@ -830,12 +525,14 @@ impl App {
 
         match action {
             // ── Navigation ──
-            AppAction::Next => self.next(),
-            AppAction::Previous => self.previous(),
-            AppAction::OpenDetail(_) => self.open_detail().await,
-            AppAction::OpenChildDetail(_) => self.open_child_detail().await,
-            AppAction::Back => self.back(),
-            AppAction::NavigateIssue { forward } => self.navigate_issue(forward).await,
+            AppAction::Next => crate::action::navigate::next(&mut self.core),
+            AppAction::Previous => crate::action::navigate::previous(&mut self.core),
+            AppAction::OpenDetail(_) => crate::action::navigate::open_detail(self).await,
+            AppAction::OpenChildDetail(_) => crate::action::navigate::open_child_detail(self).await,
+            AppAction::Back => crate::action::navigate::back(&mut self.core),
+            AppAction::NavigateIssue { forward } => {
+                crate::action::navigate::navigate_issue(self, forward).await
+            }
 
             // ── KeyBar（セレクタ・確認） ──
             AppAction::OpenSelector(def) => {
@@ -859,7 +556,7 @@ impl App {
                     ConfirmAction::Merge => {
                         self.merge_impl(&issue_id).await;
                         if matches!(&self.core.view, View::IssueDetail { .. }) {
-                            self.back();
+                            crate::action::navigate::back(&mut self.core);
                         }
                     }
                     ConfirmAction::Discard => self.discard_impl(&issue_id).await,
@@ -885,7 +582,7 @@ impl App {
             AppAction::SetStatus { issue_id, status } => {
                 self.set_status(&issue_id, &status).await;
                 if status == "closed" && matches!(&self.core.view, View::IssueDetail { .. }) {
-                    self.back();
+                    crate::action::navigate::back(&mut self.core);
                 }
             }
             AppAction::SetPriority { issue_id, priority } => {
