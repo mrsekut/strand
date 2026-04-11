@@ -6,15 +6,15 @@ use ratatui::{
 use chrono::{DateTime, FixedOffset};
 
 use crate::ai::implement::ImplStatus;
-use crate::app::{App, View};
-use crate::overlay::Overlay;
+use crate::app::App;
+use crate::core::{Overlay, View};
 use crate::ui::{
     draw_notification, execute_selector_line, format_timestamp, keybar_line, padded_keybar_line,
     priority_style, status_style, toggle_selector_line,
 };
 
 pub fn draw(frame: &mut Frame, app: &App) {
-    let (issue_id, scroll_offset, detail_diff) = match &app.view {
+    let (issue_id, scroll_offset, detail_diff) = match &app.core.view {
         View::IssueDetail {
             issue_id,
             scroll_offset,
@@ -23,15 +23,21 @@ pub fn draw(frame: &mut Frame, app: &App) {
         _ => return,
     };
     // TopLevelのissuesまたはスタック内EpicDetailのchildrenから探す
-    let issue = match app.issues.iter().find(|i| i.id == *issue_id).or_else(|| {
-        app.view_stack.iter().rev().find_map(|v| {
-            if let View::EpicDetail { children, .. } = v {
-                children.iter().find(|i| i.id == *issue_id)
-            } else {
-                None
-            }
-        })
-    }) {
+    let issue = match app
+        .core
+        .issue_store
+        .issues
+        .iter()
+        .find(|i| i.id == *issue_id)
+        .or_else(|| {
+            app.core.view_stack.iter().rev().find_map(|v| {
+                if let View::EpicDetail { children, .. } = v {
+                    children.iter().find(|i| i.id == *issue_id)
+                } else {
+                    None
+                }
+            })
+        }) {
         Some(i) => i,
         None => return,
     };
@@ -174,7 +180,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
 }
 
 fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
-    let line = match &app.overlay {
+    let line = match &app.core.overlay {
         Overlay::Selector(sel) => execute_selector_line(&sel.items, sel.cursor),
         Overlay::ToggleSelector(sel) => toggle_selector_line(&sel.items, sel.cursor),
         Overlay::Confirm(action) => padded_keybar_line(&[("y", action.label()), ("n", "cancel")]),

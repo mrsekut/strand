@@ -5,7 +5,7 @@ use ratatui::{
 
 use crate::app::App;
 use crate::bd;
-use crate::overlay::Overlay;
+use crate::core::Overlay;
 use crate::ui::{
     draw_notification, epic_icon, execute_selector_line, padded_keybar_line, priority_style,
     toggle_selector_line,
@@ -13,7 +13,7 @@ use crate::ui::{
 
 pub fn draw(frame: &mut Frame, app: &App) {
     let has_indicator =
-        app.filter.is_active() && !matches!(app.overlay, Overlay::ToggleSelector(_));
+        app.core.filter.is_active() && !matches!(app.core.overlay, Overlay::ToggleSelector(_));
 
     let mut constraints = vec![Constraint::Min(1)]; // table
     if has_indicator {
@@ -72,12 +72,12 @@ pub fn draw(frame: &mut Frame, app: &App) {
         .highlight_symbol("▶ ");
 
     let mut state = TableState::default();
-    state.select(Some(app.selected));
+    state.select(Some(app.core.issue_store.selected));
     frame.render_stateful_widget(table, table_area, &mut state);
 
     // Filter indicator
     if let Some(area) = indicator_area {
-        let filter_text = app.filter.display_text();
+        let filter_text = app.core.filter.display_text();
         let indicator = Paragraph::new(Span::styled(
             format!(" {filter_text}"),
             Style::default().fg(Color::Yellow),
@@ -90,12 +90,12 @@ pub fn draw(frame: &mut Frame, app: &App) {
 }
 
 fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
-    let line = match &app.overlay {
+    let line = match &app.core.overlay {
         Overlay::Selector(sel) => execute_selector_line(&sel.items, sel.cursor),
         Overlay::ToggleSelector(sel) => toggle_selector_line(&sel.items, sel.cursor),
         Overlay::Confirm(action) => padded_keybar_line(&[("y", action.label()), ("n", "cancel")]),
         Overlay::None => {
-            if app.filter.is_active() {
+            if app.core.filter.is_active() {
                 padded_keybar_line(&[
                     ("Enter", "detail"),
                     ("q", "create"),

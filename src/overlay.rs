@@ -2,26 +2,10 @@ use std::collections::HashSet;
 
 use crossterm::event::KeyCode;
 
-use crate::action::{AppAction, SelectorDef};
-use crate::app::{App, ConfirmAction};
-use crate::filter::Filter;
-use crate::selector::{
-    ExecuteSelector, SelectorResult, ToggleResult, ToggleSelector, ToggleTarget,
-};
-
-/// モーダルなUI状態。Overlay がアクティブな間、キーを優先的に消費する。
-pub enum Overlay {
-    None,
-    Selector(ExecuteSelector),
-    ToggleSelector(ToggleSelector),
-    Confirm(ConfirmAction),
-}
-
-impl Overlay {
-    pub fn open_selector(def: SelectorDef) -> Self {
-        Overlay::Selector(ExecuteSelector::from_def(def))
-    }
-}
+use crate::action::AppAction;
+use crate::app::App;
+use crate::core::{Filter, Overlay};
+use crate::selector::{SelectorResult, ToggleResult, ToggleTarget};
 
 /// Overlay のキー処理結果。
 pub enum OverlayOutcome {
@@ -36,11 +20,11 @@ pub enum OverlayOutcome {
 /// Overlay のキーハンドリング。全ページ共通。
 pub fn handle_overlay_key(key: KeyCode, app: &mut App) -> OverlayOutcome {
     // overlay を一時的に取り出して borrow 問題を回避
-    let mut overlay = std::mem::replace(&mut app.overlay, Overlay::None);
+    let mut overlay = std::mem::replace(&mut app.core.overlay, Overlay::None);
 
     let outcome = match &mut overlay {
         Overlay::None => {
-            app.overlay = overlay;
+            app.core.overlay = overlay;
             return OverlayOutcome::NotConsumed;
         }
         Overlay::Selector(sel) => {
@@ -51,12 +35,12 @@ pub fn handle_overlay_key(key: KeyCode, app: &mut App) -> OverlayOutcome {
                     OverlayOutcome::Action(action)
                 }
                 SelectorResult::Cancelled => {
-                    app.notification = None;
+                    app.core.notification = None;
                     OverlayOutcome::Consumed
                 }
                 SelectorResult::Continue => {
                     // overlay を戻す
-                    app.overlay = overlay;
+                    app.core.overlay = overlay;
                     return OverlayOutcome::Consumed;
                 }
             }
@@ -65,17 +49,17 @@ pub fn handle_overlay_key(key: KeyCode, app: &mut App) -> OverlayOutcome {
             let result = sel.handle_key(key);
             match result {
                 ToggleResult::Toggled => {
-                    sync_toggle_to_filter(sel, &mut app.filter);
-                    app.selected = 0;
-                    app.overlay = overlay;
+                    sync_toggle_to_filter(sel, &mut app.core.filter);
+                    app.core.issue_store.selected = 0;
+                    app.core.overlay = overlay;
                     return OverlayOutcome::Consumed;
                 }
                 ToggleResult::Done => {
-                    app.notification = None;
+                    app.core.notification = None;
                     OverlayOutcome::Consumed
                 }
                 ToggleResult::Continue => {
-                    app.overlay = overlay;
+                    app.core.overlay = overlay;
                     return OverlayOutcome::Consumed;
                 }
             }
@@ -83,10 +67,10 @@ pub fn handle_overlay_key(key: KeyCode, app: &mut App) -> OverlayOutcome {
         Overlay::Confirm(action) => {
             let action = *action;
             if let KeyCode::Char('y') = key {
-                app.notification = None;
+                app.core.notification = None;
                 OverlayOutcome::Action(AppAction::Confirm(action))
             } else {
-                app.notification = None;
+                app.core.notification = None;
                 OverlayOutcome::Consumed
             }
         }
@@ -97,7 +81,7 @@ pub fn handle_overlay_key(key: KeyCode, app: &mut App) -> OverlayOutcome {
 }
 
 /// ToggleSelector の状態を Filter に反映
-fn sync_toggle_to_filter(sel: &ToggleSelector, filter: &mut Filter) {
+fn sync_toggle_to_filter(sel: &crate::selector::ToggleSelector, filter: &mut Filter) {
     let selected: HashSet<String> = sel
         .selected_labels()
         .into_iter()
@@ -112,21 +96,28 @@ fn sync_toggle_to_filter(sel: &ToggleSelector, filter: &mut Filter) {
 
 /// FilterMenu の "status" 選択時: ToggleSelector を開く
 pub fn open_filter_status_toggle(app: &mut App) {
-    let items: Vec<(String, bool)> = crate::filter::STATUSES
+    let items: Vec<(String, bool)> = crate::core::STATUSES
         .iter()
-        .map(|s| (s.to_string(), app.filter.statuses.contains(*s)))
+        .map(|s| (s.to_string(), app.core.filter.statuses.contains(*s)))
         .collect();
-    app.overlay = Overlay::ToggleSelector(ToggleSelector::new(ToggleTarget::FilterStatus, items));
+    app.core.overlay = Overlay::ToggleSelector(crate::selector::ToggleSelector::new(
+        ToggleTarget::FilterStatus,
+        items,
+    ));
 }
 
 /// FilterMenu の "label" 選択時: ToggleSelector を開く
 pub fn open_filter_label_toggle(app: &mut App) {
-    app.filter.refresh_labels(&app.issues);
+    app.core.filter.refresh_labels(&app.core.issue_store.issues);
     let items: Vec<(String, bool)> = app
+        .core
         .filter
         .available_labels
         .iter()
-        .map(|l| (l.clone(), app.filter.labels.contains(l)))
+        .map(|l| (l.clone(), app.core.filter.labels.contains(l)))
         .collect();
-    app.overlay = Overlay::ToggleSelector(ToggleSelector::new(ToggleTarget::FilterLabel, items));
+    app.core.overlay = Overlay::ToggleSelector(crate::selector::ToggleSelector::new(
+        ToggleTarget::FilterLabel,
+        items,
+    ));
 }

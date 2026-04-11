@@ -6,9 +6,9 @@ use ratatui::{
 };
 
 use crate::ai::implement::ImplStatus;
-use crate::app::{App, View};
+use crate::app::App;
 use crate::bd;
-use crate::overlay::Overlay;
+use crate::core::{Overlay, View};
 use crate::ui::{
     draw_notification, execute_selector_line, format_timestamp, padded_keybar_line, priority_style,
     status_style, toggle_selector_line,
@@ -33,7 +33,7 @@ fn child_icon(app: &App, issue: &bd::Issue, ready_ids: &HashSet<String>) -> (&'s
 }
 
 pub fn draw(frame: &mut Frame, app: &App) {
-    let (epic_id, children, ready_ids, child_selected, scroll_offset) = match &app.view {
+    let (epic_id, children, ready_ids, child_selected, scroll_offset) = match &app.core.view {
         View::EpicDetail {
             epic_id,
             children,
@@ -50,15 +50,21 @@ pub fn draw(frame: &mut Frame, app: &App) {
         _ => return,
     };
     // TopLevelのissuesまたはスタック内EpicDetailのchildrenから探す
-    let epic = match app.issues.iter().find(|i| i.id == *epic_id).or_else(|| {
-        app.view_stack.iter().rev().find_map(|v| {
-            if let View::EpicDetail { children, .. } = v {
-                children.iter().find(|i| i.id == *epic_id)
-            } else {
-                None
-            }
-        })
-    }) {
+    let epic = match app
+        .core
+        .issue_store
+        .issues
+        .iter()
+        .find(|i| i.id == *epic_id)
+        .or_else(|| {
+            app.core.view_stack.iter().rev().find_map(|v| {
+                if let View::EpicDetail { children, .. } = v {
+                    children.iter().find(|i| i.id == *epic_id)
+                } else {
+                    None
+                }
+            })
+        }) {
         Some(e) => e,
         None => return,
     };
@@ -164,7 +170,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
 }
 
 fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
-    let line = match &app.overlay {
+    let line = match &app.core.overlay {
         Overlay::Selector(sel) => execute_selector_line(&sel.items, sel.cursor),
         Overlay::ToggleSelector(sel) => toggle_selector_line(&sel.items, sel.cursor),
         Overlay::Confirm(action) => padded_keybar_line(&[("y", action.label()), ("n", "cancel")]),

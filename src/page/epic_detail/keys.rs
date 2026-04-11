@@ -1,7 +1,8 @@
 use crossterm::event::KeyCode;
 
 use crate::action::AppAction;
-use crate::app::{App, ConfirmAction, View};
+use crate::app::App;
+use crate::core::{ConfirmAction, View};
 use crate::page::issue_list::keys::{build_ai_selector, build_status_selector};
 
 pub fn handle_key(key: KeyCode, app: &App) -> Vec<AppAction> {
@@ -46,7 +47,7 @@ pub fn handle_key(key: KeyCode, app: &App) -> Vec<AppAction> {
 }
 
 fn selected_child_id(app: &App) -> Option<String> {
-    match &app.view {
+    match &app.core.view {
         View::EpicDetail {
             children,
             child_selected,
@@ -57,7 +58,7 @@ fn selected_child_id(app: &App) -> Option<String> {
 }
 
 fn epic_id_for_edit(app: &App) -> Option<String> {
-    match &app.view {
+    match &app.core.view {
         View::EpicDetail { epic_id, .. } => Some(epic_id.clone()),
         _ => app.current_issue_id(),
     }

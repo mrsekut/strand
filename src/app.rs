@@ -1,6 +1,4 @@
-use std::collections::HashSet;
 use std::path::PathBuf;
-use std::time::{Instant, SystemTime};
 
 use anyhow::Result;
 use ratatui::prelude::*;
@@ -10,70 +8,17 @@ use crate::ai::enrich::{self, EnrichManager, EnrichOutcome};
 use crate::ai::implement::{self, ImplManager, ImplOutcome, ImplStatus};
 use crate::ai::split::{self, SplitManager, SplitOutcome};
 use crate::bd::{self, Issue};
-use crate::filter::Filter;
-use crate::overlay::Overlay;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ConfirmAction {
-    Merge,
-    Discard,
-    MergeEpic,
-    Retry,
-}
-
-impl ConfirmAction {
-    pub fn label(&self) -> &'static str {
-        match self {
-            ConfirmAction::Merge => "confirm merge",
-            ConfirmAction::Discard => "confirm discard",
-            ConfirmAction::MergeEpic => "confirm merge epic to master",
-            ConfirmAction::Retry => "confirm retry",
-        }
-    }
-
-    pub fn confirm_message(&self) -> &'static str {
-        match self {
-            ConfirmAction::Merge => "Merge? (y/n)",
-            ConfirmAction::Discard => "Discard? (y/n)",
-            ConfirmAction::MergeEpic => "Merge epic to master? (y/n)",
-            ConfirmAction::Retry => "Retry? (y/n)",
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum View {
-    IssueList,
-    IssueDetail {
-        issue_id: String,
-        scroll_offset: u16,
-        diff: Option<Vec<u8>>,
-    },
-    EpicDetail {
-        epic_id: String,
-        children: Vec<Issue>,
-        ready_ids: HashSet<String>,
-        child_selected: usize,
-        scroll_offset: u16,
-    },
-}
+use crate::core::{ConfirmAction, Core, Overlay, View};
 
 pub struct App {
-    pub issues: Vec<Issue>,
-    pub selected: usize,
-    pub view: View,
-    pub view_stack: Vec<View>,
-    pub dir: Option<String>,
+    pub core: Core,
     pub enrich_manager: EnrichManager,
     pub enrich_rx: mpsc::Receiver<enrich::EnrichEvent>,
     pub impl_manager: ImplManager,
     pub impl_rx: mpsc::Receiver<implement::ImplEvent>,
     pub split_manager: SplitManager,
     pub split_rx: mpsc::Receiver<split::SplitEvent>,
-    pub notification: Option<(String, Instant)>,
-    pub last_db_mtime: Option<SystemTime>,
-    pub overlay: Overlay,
-    pub filter: Filter,
+    pub dir: Option<String>,
 }
 
 impl App {
@@ -82,10 +27,7 @@ impl App {
         let (impl_tx, impl_rx) = mpsc::channel(32);
         let (split_tx, split_rx) = mpsc::channel(32);
         Self {
-            issues: Vec::new(),
-            selected: 0,
-            view: View::IssueList,
-            view_stack: Vec::new(),
+            core: Core::new(),
             dir,
             enrich_manager: EnrichManager::new(enrich_tx),
             enrich_rx,
@@ -93,26 +35,28 @@ impl App {
             impl_rx,
             split_manager: SplitManager::new(split_tx),
             split_rx,
-            notification: None,
-            last_db_mtime: None,
-            overlay: Overlay::None,
-            filter: Filter::new(),
         }
     }
 
     pub fn notify(&mut self, msg: impl Into<String>) {
-        self.notification = Some((msg.into(), Instant::now()));
+        self.core.notification = Some((msg.into(), std::time::Instant::now()));
     }
 
     pub async fn load_issues(&mut self) -> Result<()> {
-        self.issues = bd::list_issues(self.dir.as_deref()).await?;
-        self.last_db_mtime = self.db_mtime();
+        self.core.issue_store.issues = bd::list_issues(self.dir.as_deref()).await?;
+        self.core.issue_store.last_db_mtime = self.db_mtime();
         Ok(())
     }
 
     pub async fn restore_impl_jobs(&mut self) {
         let repo_dir = self.repo_dir();
-        let issue_ids: Vec<String> = self.issues.iter().map(|i| i.id.clone()).collect();
+        let issue_ids: Vec<String> = self
+            .core
+            .issue_store
+            .issues
+            .iter()
+            .map(|i| i.id.clone())
+            .collect();
         self.impl_manager.restore_jobs(&repo_dir, &issue_ids).await;
     }
 
@@ -120,7 +64,7 @@ impl App {
         self.repo_dir().join(".beads").join("beads.db")
     }
 
-    fn db_mtime(&self) -> Option<SystemTime> {
+    fn db_mtime(&self) -> Option<std::time::SystemTime> {
         std::fs::metadata(self.beads_db_path())
             .and_then(|m| m.modified())
             .ok()
@@ -128,7 +72,7 @@ impl App {
 
     pub fn has_db_changed(&self) -> bool {
         let current = self.db_mtime();
-        match (&self.last_db_mtime, &current) {
+        match (&self.core.issue_store.last_db_mtime, &current) {
             (Some(last), Some(now)) => now > last,
             (None, Some(_)) => true,
             _ => false,
@@ -137,22 +81,25 @@ impl App {
 
     /// フィルタ適用済みのissueリスト
     pub fn displayed_issues(&self) -> Vec<&Issue> {
-        if !self.filter.is_active() {
-            self.issues.iter().collect()
+        if !self.core.filter.is_active() {
+            self.core.issue_store.issues.iter().collect()
         } else {
-            self.issues
+            self.core
+                .issue_store
+                .issues
                 .iter()
-                .filter(|i| self.filter.matches(i))
+                .filter(|i| self.core.filter.matches(i))
                 .collect()
         }
     }
 
     pub fn next(&mut self) {
-        match &mut self.view {
+        match &mut self.core.view {
             View::IssueList => {
                 let len = self.displayed_issues().len();
                 if len > 0 {
-                    self.selected = (self.selected + 1).min(len - 1);
+                    self.core.issue_store.selected =
+                        (self.core.issue_store.selected + 1).min(len - 1);
                 }
             }
             View::EpicDetail {
@@ -171,11 +118,12 @@ impl App {
     }
 
     pub fn previous(&mut self) {
-        match &mut self.view {
+        match &mut self.core.view {
             View::IssueList => {
                 let len = self.displayed_issues().len();
                 if len > 0 {
-                    self.selected = self.selected.saturating_sub(1);
+                    self.core.issue_store.selected =
+                        self.core.issue_store.selected.saturating_sub(1);
                 }
             }
             View::EpicDetail { child_selected, .. } => {
@@ -198,7 +146,12 @@ impl App {
 
         // Clear unread label
         if issue.labels.contains(&"strand-unread".to_string()) {
-            if let Some(issue) = self.issues.get_mut(self.selected) {
+            if let Some(issue) = self
+                .core
+                .issue_store
+                .issues
+                .get_mut(self.core.issue_store.selected)
+            {
                 issue.labels.retain(|l| l != "strand-unread");
             }
             let id = issue_id.clone();
@@ -213,7 +166,7 @@ impl App {
 
     /// EpicDetailから子issueを開く
     pub async fn open_child_detail(&mut self) {
-        let issue_id = match &self.view {
+        let issue_id = match &self.core.view {
             View::EpicDetail {
                 children,
                 child_selected,
@@ -232,11 +185,11 @@ impl App {
             .await
             .unwrap_or_default();
 
-        let old = std::mem::replace(&mut self.view, View::IssueList);
-        self.view_stack.push(old);
+        let old = std::mem::replace(&mut self.core.view, View::IssueList);
+        self.core.view_stack.push(old);
 
         if children.is_empty() {
-            self.view = View::IssueDetail {
+            self.core.view = View::IssueDetail {
                 issue_id: issue_id.to_string(),
                 scroll_offset: 0,
                 diff: None,
@@ -246,7 +199,7 @@ impl App {
             let ready_ids = bd::list_ready_ids(self.dir.as_deref(), issue_id)
                 .await
                 .unwrap_or_default();
-            self.view = View::EpicDetail {
+            self.core.view = View::EpicDetail {
                 epic_id: issue_id.to_string(),
                 children,
                 ready_ids,
@@ -257,20 +210,20 @@ impl App {
     }
 
     pub fn back(&mut self) {
-        if let Some(prev) = self.view_stack.pop() {
-            self.view = prev;
+        if let Some(prev) = self.core.view_stack.pop() {
+            self.core.view = prev;
         }
     }
 
     /// IssueDetail内で次/前のissueに移動する
     pub async fn navigate_issue(&mut self, forward: bool) {
-        let View::IssueDetail { issue_id, .. } = &self.view else {
+        let View::IssueDetail { issue_id, .. } = &self.core.view else {
             return;
         };
         let current_id = issue_id.clone();
 
         // view_stackの直上がEpicDetailなら子issue間を移動、IssueListならtop-level間を移動
-        let parent = self.view_stack.last();
+        let parent = self.core.view_stack.last();
         let (issues, selected_idx) = match parent {
             Some(View::EpicDetail {
                 children,
@@ -285,11 +238,13 @@ impl App {
             }
             _ => {
                 let idx = self
+                    .core
+                    .issue_store
                     .issues
                     .iter()
                     .position(|i| i.id == current_id)
-                    .unwrap_or(self.selected);
-                (self.issues.clone(), idx)
+                    .unwrap_or(self.core.issue_store.selected);
+                (self.core.issue_store.issues.clone(), idx)
             }
         };
 
@@ -310,12 +265,12 @@ impl App {
         let new_issue_id = issues[new_idx].id.clone();
 
         // 親viewのselectedも更新
-        match self.view_stack.last_mut() {
+        match self.core.view_stack.last_mut() {
             Some(View::EpicDetail { child_selected, .. }) => {
                 *child_selected = new_idx;
             }
             _ => {
-                self.selected = new_idx;
+                self.core.issue_store.selected = new_idx;
             }
         }
 
@@ -325,7 +280,7 @@ impl App {
             .unwrap_or_default();
 
         if children.is_empty() {
-            self.view = View::IssueDetail {
+            self.core.view = View::IssueDetail {
                 issue_id: new_issue_id.clone(),
                 scroll_offset: 0,
                 diff: None,
@@ -335,7 +290,7 @@ impl App {
             let ready_ids = bd::list_ready_ids(self.dir.as_deref(), &new_issue_id)
                 .await
                 .unwrap_or_default();
-            self.view = View::EpicDetail {
+            self.core.view = View::EpicDetail {
                 epic_id: new_issue_id,
                 children,
                 ready_ids,
@@ -346,7 +301,7 @@ impl App {
     }
 
     pub async fn reload_children(&mut self) {
-        let epic_id = match &self.view {
+        let epic_id = match &self.core.view {
             View::EpicDetail { epic_id, .. } => epic_id.clone(),
             _ => return,
         };
@@ -357,7 +312,7 @@ impl App {
             .await
             .unwrap_or_default();
 
-        match &mut self.view {
+        match &mut self.core.view {
             View::EpicDetail {
                 children,
                 ready_ids,
@@ -373,7 +328,7 @@ impl App {
     async fn load_issue_detail_diff(&mut self, issue_id: &str) {
         self.rebase_impl(issue_id).await;
         let computed = self.compute_diff(issue_id).await;
-        match &mut self.view {
+        match &mut self.core.view {
             View::IssueDetail { diff, .. } => {
                 *diff = computed;
             }
@@ -444,7 +399,7 @@ impl App {
 
     /// スタックを遡って直近のEpicDetailのepic_idを探す
     pub fn find_parent_epic_id(&self) -> Option<String> {
-        for view in self.view_stack.iter().rev() {
+        for view in self.core.view_stack.iter().rev() {
             if let View::EpicDetail { epic_id, .. } = view {
                 return Some(epic_id.clone());
             }
@@ -453,12 +408,14 @@ impl App {
     }
 
     pub fn selected_issue(&self) -> Option<&Issue> {
-        self.displayed_issues().get(self.selected).copied()
+        self.displayed_issues()
+            .get(self.core.issue_store.selected)
+            .copied()
     }
 
     /// 現在のview contextで対象となるissue_idを返す
     pub fn current_issue_id(&self) -> Option<String> {
-        match &self.view {
+        match &self.core.view {
             View::IssueDetail { issue_id, .. } => Some(issue_id.clone()),
             View::EpicDetail { epic_id, .. } => Some(epic_id.clone()),
             _ => self.selected_issue().map(|i| i.id.clone()),
@@ -467,7 +424,9 @@ impl App {
 
     /// issue_id で Issue を検索する（top-level + 全 children）
     pub fn find_issue(&self, issue_id: &str) -> Option<Issue> {
-        self.issues
+        self.core
+            .issue_store
+            .issues
             .iter()
             .find(|i| i.id == issue_id)
             .cloned()
@@ -476,7 +435,7 @@ impl App {
 
     /// スタック内のEpicDetailのchildrenからissueを探す
     fn find_issue_in_stack(&self, issue_id: &str) -> Option<Issue> {
-        for view in self.view_stack.iter().rev() {
+        for view in self.core.view_stack.iter().rev() {
             if let View::EpicDetail { children, .. } = view {
                 if let Some(issue) = children.iter().find(|i| i.id == issue_id) {
                     return Some(issue.clone());
@@ -497,7 +456,7 @@ impl App {
 
     pub fn auto_enrich(&mut self) {
         self.enrich_manager
-            .auto_enrich(&self.issues, self.dir.clone());
+            .auto_enrich(&self.core.issue_store.issues, self.dir.clone());
     }
 
     pub async fn handle_enrich_event(&mut self, event: enrich::EnrichEvent) {
@@ -539,7 +498,7 @@ impl App {
                 let _ = self.load_issues().await;
                 // IssueDetailにいた場合、子ができたのでEpicDetailに遷移
                 let should_transition = matches!(
-                    &self.view,
+                    &self.core.view,
                     View::IssueDetail { issue_id: vid, .. } if *vid == issue_id
                 );
                 if should_transition {
@@ -550,7 +509,7 @@ impl App {
                         let ready_ids = bd::list_ready_ids(self.dir.as_deref(), &issue_id)
                             .await
                             .unwrap_or_default();
-                        self.view = View::EpicDetail {
+                        self.core.view = View::EpicDetail {
                             epic_id: issue_id,
                             children,
                             ready_ids,
@@ -661,8 +620,10 @@ impl App {
                     self.notify(format!("Closed: {issue_id}"));
                     let _ = self.load_issues().await;
                     self.reload_children().await;
-                    if self.selected >= self.issues.len() && self.selected > 0 {
-                        self.selected -= 1;
+                    if self.core.issue_store.selected >= self.core.issue_store.issues.len()
+                        && self.core.issue_store.selected > 0
+                    {
+                        self.core.issue_store.selected -= 1;
                     }
                 }
                 Err(e) => {
@@ -821,7 +782,7 @@ impl App {
 
     pub async fn merge_epic(&mut self, epic_id: &str) {
         // 子が全て closed か再確認
-        if let View::EpicDetail { children, .. } = &self.view {
+        if let View::EpicDetail { children, .. } = &self.core.view {
             let unclosed: Vec<String> = children
                 .iter()
                 .filter(|c| c.status != "closed")
@@ -856,13 +817,15 @@ impl App {
 
         self.back();
         let _ = self.load_issues().await;
-        if self.selected >= self.issues.len() && self.selected > 0 {
-            self.selected -= 1;
+        if self.core.issue_store.selected >= self.core.issue_store.issues.len()
+            && self.core.issue_store.selected > 0
+        {
+            self.core.issue_store.selected -= 1;
         }
     }
 
     pub fn all_children_closed(&self) -> bool {
-        match &self.view {
+        match &self.core.view {
             View::EpicDetail { children, .. } => {
                 !children.is_empty() && children.iter().all(|c| c.status == "closed")
             }
@@ -877,7 +840,6 @@ impl App {
         terminal: &mut ratatui::Terminal<ratatui::prelude::CrosstermBackend<std::io::Stdout>>,
     ) {
         use crate::action::AppAction;
-        use crate::overlay::{self, Overlay};
 
         match action {
             // ── Navigation ──
@@ -890,23 +852,23 @@ impl App {
 
             // ── Overlay ──
             AppAction::OpenSelector(def) => {
-                self.overlay = Overlay::open_selector(def);
+                self.core.overlay = Overlay::open_selector(def);
             }
             AppAction::OpenConfirm(confirm) => {
-                self.notification =
+                self.core.notification =
                     Some((confirm.confirm_message().into(), std::time::Instant::now()));
-                self.overlay = Overlay::Confirm(confirm);
+                self.core.overlay = Overlay::Confirm(confirm);
             }
             AppAction::CloseOverlay => {
-                self.overlay = Overlay::None;
-                self.notification = None;
+                self.core.overlay = Overlay::None;
+                self.core.notification = None;
             }
             AppAction::Confirm(confirm) => {
                 let issue_id = self.current_issue_id().unwrap_or_default();
                 match confirm {
                     ConfirmAction::Merge => {
                         self.merge_impl(&issue_id).await;
-                        if matches!(&self.view, View::IssueDetail { .. }) {
+                        if matches!(&self.core.view, View::IssueDetail { .. }) {
                             self.back();
                         }
                     }
@@ -932,7 +894,7 @@ impl App {
             // ── State changes ──
             AppAction::SetStatus { issue_id, status } => {
                 self.set_status(&issue_id, &status).await;
-                if status == "closed" && matches!(&self.view, View::IssueDetail { .. }) {
+                if status == "closed" && matches!(&self.core.view, View::IssueDetail { .. }) {
                     self.back();
                 }
             }
@@ -955,11 +917,11 @@ impl App {
 
             // ── Filter ──
             AppAction::ClearFilter => {
-                self.filter.clear();
-                self.selected = 0;
+                self.core.filter.clear();
+                self.core.issue_store.selected = 0;
             }
-            AppAction::OpenFilterStatusToggle => overlay::open_filter_status_toggle(self),
-            AppAction::OpenFilterLabelToggle => overlay::open_filter_label_toggle(self),
+            AppAction::OpenFilterStatusToggle => crate::overlay::open_filter_status_toggle(self),
+            AppAction::OpenFilterLabelToggle => crate::overlay::open_filter_label_toggle(self),
 
             // ── System ──
             AppAction::Notify(msg) => self.notify(msg),

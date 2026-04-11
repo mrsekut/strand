@@ -3,19 +3,19 @@ mod ai;
 mod app;
 mod bd;
 mod clipboard;
+mod core;
 mod editor;
-mod filter;
 mod overlay;
 mod page;
 mod selector;
 mod ui;
-mod widget;
 
 use std::io::stdout;
 use std::time::Duration;
 
 use anyhow::Result;
-use app::{App, View};
+use app::App;
+use core::View;
 use crossterm::{
     ExecutableCommand,
     event::{Event, EventStream, KeyCode},
@@ -123,7 +123,7 @@ ENVIRONMENT VARIABLES:
 
 /// View に応じてキーハンドラを呼ぶ（sync）
 fn dispatch_key(key: KeyCode, app: &App) -> Vec<action::AppAction> {
-    match &app.view {
+    match &app.core.view {
         View::IssueList => page::issue_list::keys::handle_key(key, app),
         View::IssueDetail { .. } => page::issue_detail::keys::handle_key(key, app),
         View::EpicDetail { .. } => page::epic_detail::keys::handle_key(key, app),

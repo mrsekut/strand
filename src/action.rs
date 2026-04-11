@@ -1,4 +1,4 @@
-use crate::app::ConfirmAction;
+use crate::core::ConfirmAction;
 
 /// strand 上の全操作を表現するデータ型。
 /// キーハンドラはこれを返すだけ。実行は App::process_action() が行う。

@@ -1,7 +1,8 @@
 use crossterm::event::KeyCode;
 
 use crate::action::AppAction;
-use crate::app::{App, ConfirmAction, View};
+use crate::app::App;
+use crate::core::{ConfirmAction, View};
 use crate::page::issue_list::keys::{build_ai_selector, build_status_selector};
 
 pub fn handle_key(key: KeyCode, app: &App) -> Vec<AppAction> {
@@ -49,7 +50,7 @@ pub fn handle_key(key: KeyCode, app: &App) -> Vec<AppAction> {
 
 fn current_issue_id_for_edit(app: &App) -> Option<String> {
     // IssueDetail では issue_id を返す
-    match &app.view {
+    match &app.core.view {
         View::IssueDetail { issue_id, .. } => Some(issue_id.clone()),
         _ => app.current_issue_id(),
     }
