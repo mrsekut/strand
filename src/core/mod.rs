@@ -6,9 +6,12 @@ pub use filter::{Filter, STATUSES};
 pub use issue_store::IssueStore;
 pub use view::{ConfirmAction, View};
 
+use std::path::PathBuf;
 use std::time::Instant;
 
-use crate::bd::Issue;
+use anyhow::Result;
+
+use crate::bd::{self, Issue};
 use crate::widget::keybar::KeyBar;
 
 pub enum Layer {
@@ -49,6 +52,28 @@ impl Core {
                 View::EpicDetail { .. } => Layer::EpicDetail,
             }
         }
+    }
+
+    pub fn notify(&mut self, msg: impl Into<String>) {
+        self.notification = Some((msg.into(), Instant::now()));
+    }
+
+    pub fn repo_dir() -> PathBuf {
+        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    }
+
+    fn beads_db_path() -> PathBuf {
+        Self::repo_dir().join(".beads").join("beads.db")
+    }
+
+    pub async fn load_issues(&mut self) -> Result<()> {
+        self.issue_store.issues = bd::list_issues(None).await?;
+        self.issue_store.last_db_mtime = IssueStore::db_mtime(&Self::beads_db_path());
+        Ok(())
+    }
+
+    pub fn has_db_changed(&self) -> bool {
+        self.issue_store.has_db_changed(&Self::beads_db_path())
     }
 
     /// 現在のview contextで対象となるissue_idを返す

@@ -122,7 +122,7 @@ pub async fn process_action(
             sync_keybar_to_filter(app);
         }
         AppAction::Confirm(confirm) => {
-            let issue_id = app.current_issue_id().unwrap_or_default();
+            let issue_id = app.core.current_issue_id().unwrap_or_default();
             match confirm {
                 ConfirmAction::Merge => {
                     impl_ops::merge_impl(app, &issue_id).await;
@@ -151,13 +151,13 @@ pub async fn process_action(
 
         // ── State changes ──
         AppAction::SetStatus { issue_id, status } => {
-            state::set_status(app, &issue_id, &status).await;
+            state::set_status(&mut app.core, &issue_id, &status).await;
             if status == "closed" && matches!(&app.core.view, View::IssueDetail { .. }) {
                 navigate::back(&mut app.core);
             }
         }
         AppAction::SetPriority { issue_id, priority } => {
-            state::set_priority(app, &issue_id, priority).await;
+            state::set_priority(&mut app.core, &issue_id, priority).await;
         }
 
         // ── Editor ──
@@ -166,8 +166,8 @@ pub async fn process_action(
 
         // ── Clipboard ──
         AppAction::CopyId(id) => match crate::clipboard::copy(&id) {
-            Ok(_) => app.notify(format!("Copied: {id}")),
-            Err(e) => app.notify(format!("Copy failed: {e}")),
+            Ok(_) => app.core.notify(format!("Copied: {id}")),
+            Err(e) => app.core.notify(format!("Copy failed: {e}")),
         },
         AppAction::CopyResumeCommand(id) => clipboard::copy_resume_command(app, &id),
         AppAction::CopyLogCommand(id) => clipboard::copy_log_command(app, &id),
@@ -182,9 +182,9 @@ pub async fn process_action(
         AppAction::OpenFilterLabelToggle => open_filter_label_toggle(app),
 
         // ── System ──
-        AppAction::Notify(msg) => app.notify(msg),
+        AppAction::Notify(msg) => app.core.notify(msg),
         AppAction::ReloadIssues => {
-            let _ = app.load_issues().await;
+            let _ = app.core.load_issues().await;
         }
     }
 }

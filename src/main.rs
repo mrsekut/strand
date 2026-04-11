@@ -33,27 +33,21 @@ async fn main() -> Result<()> {
 
     check_prerequisites()?;
 
-    let dir = args
-        .iter()
-        .position(|a| a == "--dir")
-        .and_then(|i| args.get(i + 1))
-        .cloned();
-
     // strand q "title" — quick capture (epic, P2)
     if args.get(1).map(|s| s.as_str()) == Some("q") {
         let title = args
             .get(2)
             .ok_or_else(|| anyhow::anyhow!("Usage: strand q <title>"))?;
-        bd::check_init(dir.as_deref()).await?;
-        let id = bd::quick_create(dir.as_deref(), title).await?;
+        bd::check_init(None).await?;
+        let id = bd::quick_create(None, title).await?;
         println!("{id}");
         return Ok(());
     }
 
-    bd::check_init(dir.as_deref()).await?;
+    bd::check_init(None).await?;
 
-    let mut app = App::new(dir);
-    app.load_issues().await?;
+    let mut app = App::new();
+    app.core.load_issues().await?;
     app.restore_impl_jobs().await;
     action::ai::auto_enrich(&mut app);
 
@@ -110,7 +104,6 @@ COMMANDS:
     q <title>    Quick-capture an issue
 
 OPTIONS:
-    --dir <path>    Set working directory
     -h, --help      Show this help
 
 ENVIRONMENT VARIABLES:
@@ -169,10 +162,10 @@ async fn run(
                 action::ai::handle_split_event(app, event).await;
             }
             _ = poll_interval.tick() => {
-                if app.has_db_changed() {
-                    let _ = app.load_issues().await;
+                if app.core.has_db_changed() {
+                    let _ = app.core.load_issues().await;
                     action::ai::auto_enrich(app);
-                    action::navigate::reload_children(app).await;
+                    action::navigate::reload_children(&mut app.core).await;
                 }
             }
         }
