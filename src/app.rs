@@ -3,9 +3,9 @@ use std::path::PathBuf;
 use anyhow::Result;
 use tokio::sync::mpsc;
 
-use crate::ai::enrich::{self, EnrichManager, EnrichOutcome};
-use crate::ai::implement::{self, ImplManager, ImplOutcome};
-use crate::ai::split::{self, SplitManager, SplitOutcome};
+use crate::ai::enrich::{self, EnrichManager};
+use crate::ai::implement::{self, ImplManager};
+use crate::ai::split::{self, SplitManager};
 use crate::bd::{self, Issue};
 use crate::core::{ConfirmAction, Core, View};
 use crate::widget::keybar::KeyBar;
@@ -61,6 +61,13 @@ impl App {
         self.impl_manager.restore_jobs(&repo_dir, &issue_ids).await;
     }
 
+    pub fn repo_dir(&self) -> PathBuf {
+        match &self.dir {
+            Some(d) => PathBuf::from(d),
+            None => std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+        }
+    }
+
     fn beads_db_path(&self) -> PathBuf {
         self.repo_dir().join(".beads").join("beads.db")
     }
@@ -87,129 +94,6 @@ impl App {
 
     pub fn find_issue(&self, issue_id: &str) -> Option<Issue> {
         self.core.find_issue(issue_id)
-    }
-
-    // --- Enrich ---
-
-    pub fn start_enrich(&mut self, issue_id: &str) {
-        let Some(issue) = self.find_issue(issue_id) else {
-            return;
-        };
-        self.enrich_manager.start(&issue, self.dir.clone());
-    }
-
-    pub fn auto_enrich(&mut self) {
-        self.enrich_manager
-            .auto_enrich(&self.core.issue_store.issues, self.dir.clone());
-    }
-
-    pub async fn handle_enrich_event(&mut self, event: enrich::EnrichEvent) {
-        let outcome = self.enrich_manager.handle_event(event);
-        match outcome {
-            EnrichOutcome::Started { issue_id } => {
-                self.notify(format!("Enriching: {issue_id}..."));
-            }
-            EnrichOutcome::Completed { issue_id } => {
-                self.notify(format!("Enriched: {issue_id}"));
-                let _ = self.load_issues().await;
-            }
-            EnrichOutcome::Failed { issue_id, error } => {
-                self.notify(format!("Enrich failed: {issue_id}: {error}"));
-            }
-        }
-    }
-
-    // --- Split ---
-
-    pub fn start_split(&mut self, issue_id: &str) {
-        let Some(issue) = self.find_issue(issue_id) else {
-            return;
-        };
-        self.split_manager.start(&issue, self.dir.clone());
-    }
-
-    pub async fn handle_split_event(&mut self, event: split::SplitEvent) {
-        let outcome = self.split_manager.handle_event(event);
-        match outcome {
-            SplitOutcome::Started { issue_id } => {
-                self.notify(format!("Splitting: {issue_id}..."));
-            }
-            SplitOutcome::Completed {
-                issue_id,
-                task_count,
-            } => {
-                self.notify(format!("Split: {issue_id} → {task_count} tasks"));
-                let _ = self.load_issues().await;
-                // IssueDetailにいた場合、子ができたのでEpicDetailに遷移
-                let should_transition = matches!(
-                    &self.core.view,
-                    View::IssueDetail { issue_id: vid, .. } if *vid == issue_id
-                );
-                if should_transition {
-                    let children = bd::list_children(self.dir.as_deref(), &issue_id)
-                        .await
-                        .unwrap_or_default();
-                    if !children.is_empty() {
-                        let ready_ids = bd::list_ready_ids(self.dir.as_deref(), &issue_id)
-                            .await
-                            .unwrap_or_default();
-                        self.core.view = View::EpicDetail {
-                            epic_id: issue_id,
-                            children,
-                            ready_ids,
-                            child_selected: 0,
-                            scroll_offset: 0,
-                        };
-                    }
-                }
-            }
-            SplitOutcome::Failed { issue_id, error } => {
-                self.notify(format!("Split failed: {issue_id}: {error}"));
-            }
-        }
-    }
-
-    // --- Implement ---
-
-    pub fn repo_dir(&self) -> PathBuf {
-        match &self.dir {
-            Some(d) => PathBuf::from(d),
-            None => std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
-        }
-    }
-
-    pub async fn start_implement(&mut self, issue_id: &str, epic_id: Option<&str>) {
-        let Some(issue) = self.find_issue(issue_id) else {
-            return;
-        };
-
-        let repo_dir = self.repo_dir();
-        if let Err(e) = self
-            .impl_manager
-            .start(&issue, epic_id, &repo_dir, self.dir.clone())
-            .await
-        {
-            self.notify(format!("Failed to start impl: {e}"));
-        }
-    }
-
-    pub fn handle_impl_event(&mut self, event: implement::ImplEvent) {
-        let dir = self.repo_dir().to_string_lossy().to_string();
-        let outcome = self.impl_manager.handle_event(event, &dir);
-        match outcome {
-            ImplOutcome::Started { issue_id } => {
-                self.notify(format!("Implementing: {issue_id}..."));
-            }
-            ImplOutcome::Completed { issue_id, summary } => {
-                self.notify(format!(
-                    "Implementation done: {issue_id} (log: {} bytes)",
-                    summary.len()
-                ));
-            }
-            ImplOutcome::Failed { issue_id, error } => {
-                self.notify(format!("Implement failed: {issue_id}: {error}"));
-            }
-        }
     }
 
     pub async fn merge_impl(&mut self, issue_id: &str) {
@@ -252,7 +136,7 @@ impl App {
         }
 
         let epic_id = self.find_parent_epic_id();
-        self.start_implement(issue_id, epic_id.as_deref()).await;
+        crate::action::ai::start_implement(self, issue_id, epic_id.as_deref()).await;
     }
 
     // --- Merge Epic ---
@@ -398,11 +282,11 @@ impl App {
             }
 
             // ── AI workflows ──
-            AppAction::StartEnrich(id) => self.start_enrich(&id),
+            AppAction::StartEnrich(id) => crate::action::ai::start_enrich(self, &id),
             AppAction::StartImplement { issue_id, epic_id } => {
-                self.start_implement(&issue_id, epic_id.as_deref()).await;
+                crate::action::ai::start_implement(self, &issue_id, epic_id.as_deref()).await
             }
-            AppAction::StartSplit(id) => self.start_split(&id),
+            AppAction::StartSplit(id) => crate::action::ai::start_split(self, &id),
 
             // ── Impl operations ──
             AppAction::MergeImpl(id) => self.merge_impl(&id).await,

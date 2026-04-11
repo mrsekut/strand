@@ -16,7 +16,7 @@ pub async fn quick_create_with_editor(
             Ok(id) => {
                 app.notify(format!("Created: {id}"));
                 let _ = app.load_issues().await;
-                app.auto_enrich();
+                crate::action::ai::auto_enrich(app);
             }
             Err(e) => {
                 app.notify(format!("Create failed: {e}"));

@@ -1,3 +1,4 @@
+pub mod ai;
 pub mod clipboard;
 pub mod editor;
 pub mod navigate;

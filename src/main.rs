@@ -55,7 +55,7 @@ async fn main() -> Result<()> {
     let mut app = App::new(dir);
     app.load_issues().await?;
     app.restore_impl_jobs().await;
-    app.auto_enrich();
+    action::ai::auto_enrich(&mut app);
 
     enable_raw_mode()?;
     stdout().execute(EnterAlternateScreen)?;
@@ -159,18 +159,18 @@ async fn run(
                 }
             }
             Some(event) = app.enrich_rx.recv() => {
-                app.handle_enrich_event(event).await;
+                action::ai::handle_enrich_event(app, event).await;
             }
             Some(event) = app.impl_rx.recv() => {
-                app.handle_impl_event(event);
+                action::ai::handle_impl_event(app, event);
             }
             Some(event) = app.split_rx.recv() => {
-                app.handle_split_event(event).await;
+                action::ai::handle_split_event(app, event).await;
             }
             _ = poll_interval.tick() => {
                 if app.has_db_changed() {
                     let _ = app.load_issues().await;
-                    app.auto_enrich();
+                    action::ai::auto_enrich(app);
                     action::navigate::reload_children(app).await;
                 }
             }
