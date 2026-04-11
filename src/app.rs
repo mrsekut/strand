@@ -75,10 +75,6 @@ impl App {
         self.core.issue_store.has_db_changed(&self.beads_db_path())
     }
 
-    pub fn displayed_issues(&self) -> Vec<&Issue> {
-        self.core.issue_store.displayed_issues(&self.core.filter)
-    }
-
     pub fn find_parent_epic_id(&self) -> Option<String> {
         self.core.find_parent_epic_id()
     }
@@ -93,9 +89,5 @@ impl App {
 
     pub fn find_issue(&self, issue_id: &str) -> Option<Issue> {
         self.core.find_issue(issue_id)
-    }
-
-    pub fn all_children_closed(&self) -> bool {
-        self.core.all_children_closed()
     }
 }

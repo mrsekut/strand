@@ -2,14 +2,19 @@ use ratatui::{prelude::*, widgets::Paragraph};
 
 use chrono::{DateTime, FixedOffset};
 
-use crate::ai::implement::ImplStatus;
-use crate::app::App;
+use crate::ai::enrich::EnrichManager;
+use crate::ai::implement::{ImplManager, ImplStatus};
 use crate::bd::Issue;
-use crate::core::View;
+use crate::core::{Core, View};
 use crate::page;
 use crate::widget::keybar::KeyBar;
 
-pub fn draw(frame: &mut Frame, app: &App) {
+pub fn draw(
+    frame: &mut Frame,
+    core: &Core,
+    impl_manager: &ImplManager,
+    enrich_manager: &EnrichManager,
+) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -20,19 +25,25 @@ pub fn draw(frame: &mut Frame, app: &App) {
         .split(frame.area());
 
     // ページコンテンツ
-    match &app.core.view {
-        View::IssueList => page::issue_list::ui::draw(frame, app, chunks[0]),
-        View::IssueDetail { .. } => page::issue_detail::ui::draw(frame, app, chunks[0]),
-        View::EpicDetail { .. } => page::epic_detail::ui::draw(frame, app, chunks[0]),
+    match &core.view {
+        View::IssueList => {
+            page::issue_list::ui::draw(frame, core, impl_manager, enrich_manager, chunks[0])
+        }
+        View::IssueDetail { .. } => {
+            page::issue_detail::ui::draw(frame, core, impl_manager, chunks[0])
+        }
+        View::EpicDetail { .. } => {
+            page::epic_detail::ui::draw(frame, core, impl_manager, chunks[0])
+        }
     }
 
     // KeyBar
-    match &app.core.keybar {
+    match &core.keybar {
         KeyBar::Default => {
-            let line = match &app.core.view {
-                View::IssueList => page::issue_list::ui::key_hints(app),
-                View::IssueDetail { .. } => page::issue_detail::ui::key_hints(app),
-                View::EpicDetail { .. } => page::epic_detail::ui::key_hints(app),
+            let line = match &core.view {
+                View::IssueList => page::issue_list::ui::key_hints(core),
+                View::IssueDetail { .. } => page::issue_detail::ui::key_hints(),
+                View::EpicDetail { .. } => page::epic_detail::ui::key_hints(core, impl_manager),
             };
             frame.render_widget(Paragraph::new(line), chunks[1]);
         }
@@ -40,7 +51,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
     }
 
     // notification
-    draw_notification(frame, app, chunks[2]);
+    draw_notification(frame, core, chunks[2]);
 }
 
 // --- Shared helpers ---
@@ -72,8 +83,12 @@ pub fn status_style(status: &str) -> Style {
     }
 }
 
-pub fn epic_icon(app: &App, issue: &Issue) -> (&'static str, Style) {
-    if let Some(job) = app.impl_manager.get_job(&issue.id) {
+pub fn epic_icon(
+    impl_manager: &ImplManager,
+    enrich_manager: &EnrichManager,
+    issue: &Issue,
+) -> (&'static str, Style) {
+    if let Some(job) = impl_manager.get_job(&issue.id) {
         return match &job.status {
             ImplStatus::Running => ("⚡", Style::default().fg(Color::Magenta)),
             ImplStatus::Done => ("✓", Style::default().fg(Color::Green)),
@@ -81,7 +96,7 @@ pub fn epic_icon(app: &App, issue: &Issue) -> (&'static str, Style) {
             ImplStatus::Interrupted => ("⚠", Style::default().fg(Color::Yellow)),
         };
     }
-    if app.enrich_manager.is_enriching(&issue.id) {
+    if enrich_manager.is_enriching(&issue.id) {
         return ("⟳", Style::default().fg(Color::Yellow));
     }
     if issue.labels.contains(&"strand-unread".to_string()) {
@@ -114,8 +129,8 @@ pub fn keybar_line(keys: &[(&str, &str)]) -> Line<'static> {
     Line::from(spans)
 }
 
-fn draw_notification(frame: &mut Frame, app: &App, area: Rect) {
-    if let Some((msg, time)) = &app.core.notification {
+fn draw_notification(frame: &mut Frame, core: &Core, area: Rect) {
+    if let Some((msg, time)) = &core.notification {
         if time.elapsed().as_secs() < 5 {
             let status =
                 Paragraph::new(format!(" {msg}")).style(Style::default().fg(Color::Yellow));

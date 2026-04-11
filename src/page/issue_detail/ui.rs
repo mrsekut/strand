@@ -5,13 +5,12 @@ use ratatui::{
 
 use chrono::{DateTime, FixedOffset};
 
-use crate::ai::implement::ImplStatus;
-use crate::app::App;
-use crate::core::View;
+use crate::ai::implement::{ImplManager, ImplStatus};
+use crate::core::{Core, View};
 use crate::ui::{format_timestamp, keybar_line, padded_keybar_line, priority_style, status_style};
 
-pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
-    let (issue_id, scroll_offset, detail_diff) = match &app.core.view {
+pub fn draw(frame: &mut Frame, core: &Core, impl_manager: &ImplManager, area: Rect) {
+    let (issue_id, scroll_offset, detail_diff) = match &core.view {
         View::IssueDetail {
             issue_id,
             scroll_offset,
@@ -20,14 +19,13 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
         _ => return,
     };
     // TopLevelのissuesまたはスタック内EpicDetailのchildrenから探す
-    let issue = match app
-        .core
+    let issue = match core
         .issue_store
         .issues
         .iter()
         .find(|i| i.id == *issue_id)
         .or_else(|| {
-            app.core.view_stack.iter().rev().find_map(|v| {
+            core.view_stack.iter().rev().find_map(|v| {
                 if let View::EpicDetail { children, .. } = v {
                     children.iter().find(|i| i.id == *issue_id)
                 } else {
@@ -73,7 +71,7 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     lines.push(Line::from(""));
 
     // Impl job info
-    if let Some(job) = app.impl_manager.get_job(&issue.id) {
+    if let Some(job) = impl_manager.get_job(&issue.id) {
         let is_stale = {
             let impl_completed = job.completed_at.as_deref();
             let desc_updated = issue.updated_at.as_deref();
@@ -164,7 +162,7 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(paragraph, content_area);
 }
 
-pub fn key_hints(_app: &App) -> Line<'static> {
+pub fn key_hints() -> Line<'static> {
     padded_keybar_line(&[
         ("Esc", "back"),
         ("q", "create"),

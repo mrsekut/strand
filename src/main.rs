@@ -139,7 +139,8 @@ async fn run(
     poll_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
     loop {
-        terminal.draw(|frame| ui::draw(frame, app))?;
+        terminal
+            .draw(|frame| ui::draw(frame, &app.core, &app.impl_manager, &app.enrich_manager))?;
 
         tokio::select! {
             maybe_event = event_stream.next() => {

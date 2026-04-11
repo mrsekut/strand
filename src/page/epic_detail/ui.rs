@@ -5,14 +5,17 @@ use ratatui::{
     widgets::{Cell, Paragraph, Row, Table, TableState, Wrap},
 };
 
-use crate::ai::implement::ImplStatus;
-use crate::app::App;
+use crate::ai::implement::{ImplManager, ImplStatus};
 use crate::bd;
-use crate::core::View;
+use crate::core::{Core, View};
 use crate::ui::{format_timestamp, padded_keybar_line, priority_style, status_style};
 
-fn child_icon(app: &App, issue: &bd::Issue, ready_ids: &HashSet<String>) -> (&'static str, Style) {
-    if let Some(job) = app.impl_manager.get_job(&issue.id) {
+fn child_icon(
+    impl_manager: &ImplManager,
+    issue: &bd::Issue,
+    ready_ids: &HashSet<String>,
+) -> (&'static str, Style) {
+    if let Some(job) = impl_manager.get_job(&issue.id) {
         return match &job.status {
             ImplStatus::Running => ("⚡", Style::default().fg(Color::Magenta)),
             ImplStatus::Done => ("✓", Style::default().fg(Color::Green)),
@@ -29,8 +32,8 @@ fn child_icon(app: &App, issue: &bd::Issue, ready_ids: &HashSet<String>) -> (&'s
     ("·", Style::default().fg(Color::DarkGray))
 }
 
-pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
-    let (epic_id, children, ready_ids, child_selected, scroll_offset) = match &app.core.view {
+pub fn draw(frame: &mut Frame, core: &Core, impl_manager: &ImplManager, area: Rect) {
+    let (epic_id, children, ready_ids, child_selected, scroll_offset) = match &core.view {
         View::EpicDetail {
             epic_id,
             children,
@@ -47,14 +50,13 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
         _ => return,
     };
     // TopLevelのissuesまたはスタック内EpicDetailのchildrenから探す
-    let epic = match app
-        .core
+    let epic = match core
         .issue_store
         .issues
         .iter()
         .find(|i| i.id == *epic_id)
         .or_else(|| {
-            app.core.view_stack.iter().rev().find_map(|v| {
+            core.view_stack.iter().rev().find_map(|v| {
                 if let View::EpicDetail { children, .. } = v {
                     children.iter().find(|i| i.id == *epic_id)
                 } else {
@@ -122,7 +124,7 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
         let rows: Vec<Row> = children
             .iter()
             .map(|issue| {
-                let (icon, icon_style) = child_icon(app, issue, ready_ids);
+                let (icon, icon_style) = child_icon(impl_manager, issue, ready_ids);
                 let priority_text = issue.priority.map(|p| format!("P{p}")).unwrap_or_default();
                 Row::new(vec![
                     Cell::from(icon).style(icon_style),
@@ -154,7 +156,7 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     }
 }
 
-pub fn key_hints(app: &App) -> Line<'static> {
+pub fn key_hints(core: &Core, impl_manager: &ImplManager) -> Line<'static> {
     let mut keys = vec![
         ("Enter", "open issue"),
         ("Esc", "back"),
@@ -164,15 +166,15 @@ pub fn key_hints(app: &App) -> Line<'static> {
         ("a", "ai"),
         ("s", "status"),
     ];
-    if let Some(issue_id) = app.current_issue_id() {
-        if let Some(job) = app.impl_manager.get_job(&issue_id) {
+    if let Some(issue_id) = core.current_issue_id() {
+        if let Some(job) = impl_manager.get_job(&issue_id) {
             keys.push(("p", "path"));
             if job.session_id.is_some() {
                 keys.push(("c", "continue"));
             }
         }
     }
-    if app.all_children_closed() {
+    if core.all_children_closed() {
         keys.push(("m", "merge to master"));
     }
     padded_keybar_line(&keys)

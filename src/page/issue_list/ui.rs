@@ -3,14 +3,21 @@ use ratatui::{
     widgets::{Cell, Paragraph, Row, Table, TableState},
 };
 
-use crate::app::App;
+use crate::ai::enrich::EnrichManager;
+use crate::ai::implement::ImplManager;
 use crate::bd;
+use crate::core::Core;
 use crate::ui::{epic_icon, padded_keybar_line, priority_style};
 use crate::widget::keybar::KeyBar;
 
-pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
-    let has_indicator =
-        app.core.filter.is_active() && !matches!(app.core.keybar, KeyBar::Toggle(_));
+pub fn draw(
+    frame: &mut Frame,
+    core: &Core,
+    impl_manager: &ImplManager,
+    enrich_manager: &EnrichManager,
+    area: Rect,
+) {
+    let has_indicator = core.filter.is_active() && !matches!(core.keybar, KeyBar::Toggle(_));
 
     let constraints: Vec<Constraint> = if has_indicator {
         vec![Constraint::Min(1), Constraint::Length(1)]
@@ -26,12 +33,12 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     let table_area = chunks[0];
 
     // Table (with filter applied)
-    let displayed = app.displayed_issues();
+    let displayed = core.issue_store.displayed_issues(&core.filter);
 
     let rows: Vec<Row> = displayed
         .iter()
         .map(|issue| {
-            let (icon, icon_style) = epic_icon(app, issue);
+            let (icon, icon_style) = epic_icon(impl_manager, enrich_manager, issue);
             let priority_text = issue.priority.map(|p| format!("P{p}")).unwrap_or_default();
             Row::new(vec![
                 Cell::from(icon).style(icon_style),
@@ -55,12 +62,12 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
         .highlight_symbol("▶ ");
 
     let mut state = TableState::default();
-    state.select(Some(app.core.issue_store.selected));
+    state.select(Some(core.issue_store.selected));
     frame.render_stateful_widget(table, table_area, &mut state);
 
     // Filter indicator
     if has_indicator {
-        let filter_text = app.core.filter.display_text();
+        let filter_text = core.filter.display_text();
         let indicator = Paragraph::new(Span::styled(
             format!(" {filter_text}"),
             Style::default().fg(Color::Yellow),
@@ -69,8 +76,8 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     }
 }
 
-pub fn key_hints(app: &App) -> Line<'static> {
-    if app.core.filter.is_active() {
+pub fn key_hints(core: &Core) -> Line<'static> {
+    if core.filter.is_active() {
         padded_keybar_line(&[
             ("Enter", "detail"),
             ("q", "create"),
