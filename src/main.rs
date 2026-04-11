@@ -14,7 +14,6 @@ use std::time::Duration;
 
 use anyhow::Result;
 use app::App;
-use core::View;
 use crossterm::{
     ExecutableCommand,
     event::{Event, EventStream, KeyCode},
@@ -120,12 +119,14 @@ ENVIRONMENT VARIABLES:
     );
 }
 
-/// View に応じてキーハンドラを呼ぶ（sync）
-fn dispatch_key(key: KeyCode, app: &App) -> Vec<action::AppAction> {
-    match &app.core.view {
-        View::IssueList => page::issue_list::keys::handle_key(key, app),
-        View::IssueDetail { .. } => page::issue_detail::keys::handle_key(key, app),
-        View::EpicDetail { .. } => page::epic_detail::keys::handle_key(key, app),
+/// Layer に応じてキーハンドラを呼ぶ
+fn dispatch_key(key: KeyCode, app: &mut App) -> Vec<action::AppAction> {
+    use core::Layer;
+    match app.core.layer() {
+        Layer::KeyBar => app.core.keybar.handle_key(key),
+        Layer::IssueList => page::issue_list::keys::handle_key(key, app),
+        Layer::IssueDetail => page::issue_detail::keys::handle_key(key, app),
+        Layer::EpicDetail => page::epic_detail::keys::handle_key(key, app),
     }
 }
 
@@ -147,12 +148,7 @@ async fn run(
                         if key.code == KeyCode::Char('c') && key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) {
                             break;
                         }
-                        // KeyBar がアクティブならキーを消費、そうでなければ page に委譲
-                        let actions = if !app.core.keybar.is_default() {
-                            app.core.keybar.handle_key(key.code)
-                        } else {
-                            dispatch_key(key.code, app)
-                        };
+                        let actions = dispatch_key(key.code, app);
                         for action in actions {
                             app.process_action(action, terminal).await;
                         }

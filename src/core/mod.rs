@@ -11,6 +11,13 @@ use std::time::Instant;
 use crate::bd::Issue;
 use crate::widget::keybar::KeyBar;
 
+pub enum Layer {
+    KeyBar,
+    IssueList,
+    IssueDetail,
+    EpicDetail,
+}
+
 pub struct Core {
     pub issue_store: IssueStore,
     pub view: View,
@@ -29,6 +36,18 @@ impl Core {
             keybar: KeyBar::Default,
             filter: Filter::new(),
             notification: None,
+        }
+    }
+
+    pub fn layer(&self) -> Layer {
+        if !self.keybar.is_default() {
+            Layer::KeyBar
+        } else {
+            match &self.view {
+                View::IssueList => Layer::IssueList,
+                View::IssueDetail { .. } => Layer::IssueDetail,
+                View::EpicDetail { .. } => Layer::EpicDetail,
+            }
         }
     }
 
