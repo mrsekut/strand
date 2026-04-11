@@ -44,7 +44,8 @@ impl App {
 
     pub async fn load_issues(&mut self) -> Result<()> {
         self.core.issue_store.issues = bd::list_issues(self.dir.as_deref()).await?;
-        self.core.issue_store.last_db_mtime = self.db_mtime();
+        self.core.issue_store.last_db_mtime =
+            crate::core::IssueStore::db_mtime(&self.beads_db_path());
         Ok(())
     }
 
@@ -64,33 +65,12 @@ impl App {
         self.repo_dir().join(".beads").join("beads.db")
     }
 
-    fn db_mtime(&self) -> Option<std::time::SystemTime> {
-        std::fs::metadata(self.beads_db_path())
-            .and_then(|m| m.modified())
-            .ok()
-    }
-
     pub fn has_db_changed(&self) -> bool {
-        let current = self.db_mtime();
-        match (&self.core.issue_store.last_db_mtime, &current) {
-            (Some(last), Some(now)) => now > last,
-            (None, Some(_)) => true,
-            _ => false,
-        }
+        self.core.issue_store.has_db_changed(&self.beads_db_path())
     }
 
-    /// フィルタ適用済みのissueリスト
     pub fn displayed_issues(&self) -> Vec<&Issue> {
-        if !self.core.filter.is_active() {
-            self.core.issue_store.issues.iter().collect()
-        } else {
-            self.core
-                .issue_store
-                .issues
-                .iter()
-                .filter(|i| self.core.filter.matches(i))
-                .collect()
-        }
+        self.core.issue_store.displayed_issues(&self.core.filter)
     }
 
     pub fn next(&mut self) {
@@ -399,50 +379,19 @@ impl App {
 
     /// スタックを遡って直近のEpicDetailのepic_idを探す
     pub fn find_parent_epic_id(&self) -> Option<String> {
-        for view in self.core.view_stack.iter().rev() {
-            if let View::EpicDetail { epic_id, .. } = view {
-                return Some(epic_id.clone());
-            }
-        }
-        None
+        self.core.find_parent_epic_id()
     }
 
     pub fn selected_issue(&self) -> Option<&Issue> {
-        self.displayed_issues()
-            .get(self.core.issue_store.selected)
-            .copied()
+        self.core.issue_store.selected_issue(&self.core.filter)
     }
 
-    /// 現在のview contextで対象となるissue_idを返す
     pub fn current_issue_id(&self) -> Option<String> {
-        match &self.core.view {
-            View::IssueDetail { issue_id, .. } => Some(issue_id.clone()),
-            View::EpicDetail { epic_id, .. } => Some(epic_id.clone()),
-            _ => self.selected_issue().map(|i| i.id.clone()),
-        }
+        self.core.current_issue_id()
     }
 
-    /// issue_id で Issue を検索する（top-level + 全 children）
     pub fn find_issue(&self, issue_id: &str) -> Option<Issue> {
-        self.core
-            .issue_store
-            .issues
-            .iter()
-            .find(|i| i.id == issue_id)
-            .cloned()
-            .or_else(|| self.find_issue_in_stack(issue_id))
-    }
-
-    /// スタック内のEpicDetailのchildrenからissueを探す
-    fn find_issue_in_stack(&self, issue_id: &str) -> Option<Issue> {
-        for view in self.core.view_stack.iter().rev() {
-            if let View::EpicDetail { children, .. } = view {
-                if let Some(issue) = children.iter().find(|i| i.id == issue_id) {
-                    return Some(issue.clone());
-                }
-            }
-        }
-        None
+        self.core.find_issue(issue_id)
     }
 
     // --- Enrich ---
@@ -825,12 +774,7 @@ impl App {
     }
 
     pub fn all_children_closed(&self) -> bool {
-        match &self.core.view {
-            View::EpicDetail { children, .. } => {
-                !children.is_empty() && children.iter().all(|c| c.status == "closed")
-            }
-            _ => false,
-        }
+        self.core.all_children_closed()
     }
 
     /// AppAction を処理する。全操作のディスパッチャ。
