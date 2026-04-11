@@ -124,9 +124,9 @@ fn dispatch_key(key: KeyCode, app: &mut App) -> Vec<action::AppAction> {
     use core::Layer;
     match app.core.layer() {
         Layer::KeyBar => app.core.keybar.handle_key(key),
-        Layer::IssueList => page::issue_list::keys::handle_key(key, app),
-        Layer::IssueDetail => page::issue_detail::keys::handle_key(key, app),
-        Layer::EpicDetail => page::epic_detail::keys::handle_key(key, app),
+        Layer::IssueList => page::issue_list::keys::handle_key(key, &app.core),
+        Layer::IssueDetail => page::issue_detail::keys::handle_key(key, &app.core),
+        Layer::EpicDetail => page::epic_detail::keys::handle_key(key, &app.core),
     }
 }
 

@@ -1,43 +1,42 @@
 use crossterm::event::KeyCode;
 
 use crate::action::AppAction;
-use crate::app::App;
-use crate::core::{ConfirmAction, View};
+use crate::core::{ConfirmAction, Core, View};
 use crate::page::issue_list::keys::{build_ai_selector, build_status_selector};
 
-pub fn handle_key(key: KeyCode, app: &App) -> Vec<AppAction> {
+pub fn handle_key(key: KeyCode, core: &Core) -> Vec<AppAction> {
     match key {
         KeyCode::Esc => vec![AppAction::Back],
         KeyCode::Down | KeyCode::Char('j') => vec![AppAction::Next],
         KeyCode::Up | KeyCode::Char('k') => vec![AppAction::Previous],
-        KeyCode::Enter => match selected_child_id(app) {
+        KeyCode::Enter => match selected_child_id(core) {
             Some(id) => vec![AppAction::OpenChildDetail(id)],
             None => vec![],
         },
-        KeyCode::Char('y') => match app.current_issue_id() {
+        KeyCode::Char('y') => match core.current_issue_id() {
             Some(id) => vec![AppAction::CopyId(id)],
             None => vec![],
         },
-        KeyCode::Char('e') => match epic_id_for_edit(app) {
+        KeyCode::Char('e') => match epic_id_for_edit(core) {
             Some(id) => vec![AppAction::EditDescription(id)],
             None => vec![],
         },
-        KeyCode::Char('a') => match build_ai_selector(app) {
+        KeyCode::Char('a') => match build_ai_selector(core) {
             Some(def) => vec![AppAction::OpenSelector(def)],
             None => vec![],
         },
-        KeyCode::Char('m') if app.all_children_closed() => {
+        KeyCode::Char('m') if core.all_children_closed() => {
             vec![AppAction::OpenConfirm(ConfirmAction::MergeEpic)]
         }
-        KeyCode::Char('s') => match build_status_selector(app) {
+        KeyCode::Char('s') => match build_status_selector(core) {
             Some(def) => vec![AppAction::OpenSelector(def)],
             None => vec![],
         },
-        KeyCode::Char('p') => match app.current_issue_id() {
+        KeyCode::Char('p') => match core.current_issue_id() {
             Some(id) => vec![AppAction::CopyWorktreePath(id)],
             None => vec![],
         },
-        KeyCode::Char('c') => match app.current_issue_id() {
+        KeyCode::Char('c') => match core.current_issue_id() {
             Some(id) => vec![AppAction::CopyResumeCommand(id)],
             None => vec![],
         },
@@ -46,8 +45,8 @@ pub fn handle_key(key: KeyCode, app: &App) -> Vec<AppAction> {
     }
 }
 
-fn selected_child_id(app: &App) -> Option<String> {
-    match &app.core.view {
+fn selected_child_id(core: &Core) -> Option<String> {
+    match &core.view {
         View::EpicDetail {
             children,
             child_selected,
@@ -57,9 +56,9 @@ fn selected_child_id(app: &App) -> Option<String> {
     }
 }
 
-fn epic_id_for_edit(app: &App) -> Option<String> {
-    match &app.core.view {
+fn epic_id_for_edit(core: &Core) -> Option<String> {
+    match &core.view {
         View::EpicDetail { epic_id, .. } => Some(epic_id.clone()),
-        _ => app.current_issue_id(),
+        _ => core.current_issue_id(),
     }
 }

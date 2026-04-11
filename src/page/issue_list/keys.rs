@@ -1,29 +1,29 @@
 use crossterm::event::KeyCode;
 
 use crate::action::{AppAction, SelectorDef, SelectorItem};
-use crate::app::App;
+use crate::core::Core;
 
-pub fn handle_key(key: KeyCode, app: &App) -> Vec<AppAction> {
+pub fn handle_key(key: KeyCode, core: &Core) -> Vec<AppAction> {
     match key {
         KeyCode::Down | KeyCode::Char('j') => vec![AppAction::Next],
         KeyCode::Up | KeyCode::Char('k') => vec![AppAction::Previous],
-        KeyCode::Enter => match app.selected_issue() {
+        KeyCode::Enter => match core.issue_store.selected_issue(&core.filter) {
             Some(issue) => vec![AppAction::OpenDetail(issue.id.clone())],
             None => vec![],
         },
-        KeyCode::Char('y') => match app.current_issue_id() {
+        KeyCode::Char('y') => match core.current_issue_id() {
             Some(id) => vec![AppAction::CopyId(id)],
             None => vec![],
         },
-        KeyCode::Char('a') => match build_ai_selector(app) {
+        KeyCode::Char('a') => match build_ai_selector(core) {
             Some(def) => vec![AppAction::OpenSelector(def)],
             None => vec![],
         },
-        KeyCode::Char('s') => match build_status_selector(app) {
+        KeyCode::Char('s') => match build_status_selector(core) {
             Some(def) => vec![AppAction::OpenSelector(def)],
             None => vec![],
         },
-        KeyCode::Char('p') => match build_priority_selector(app) {
+        KeyCode::Char('p') => match build_priority_selector(core) {
             Some(def) => vec![AppAction::OpenSelector(def)],
             None => vec![],
         },
@@ -33,9 +33,9 @@ pub fn handle_key(key: KeyCode, app: &App) -> Vec<AppAction> {
     }
 }
 
-pub fn build_ai_selector(app: &App) -> Option<SelectorDef> {
-    let issue_id = app.current_issue_id()?;
-    let epic_id = app.find_parent_epic_id();
+pub fn build_ai_selector(core: &Core) -> Option<SelectorDef> {
+    let issue_id = core.current_issue_id()?;
+    let epic_id = core.find_parent_epic_id();
     Some(SelectorDef {
         items: vec![
             SelectorItem {
@@ -61,8 +61,8 @@ pub fn build_ai_selector(app: &App) -> Option<SelectorDef> {
     })
 }
 
-pub fn build_status_selector(app: &App) -> Option<SelectorDef> {
-    let issue_id = app.current_issue_id()?;
+pub fn build_status_selector(core: &Core) -> Option<SelectorDef> {
+    let issue_id = core.current_issue_id()?;
     Some(SelectorDef {
         items: vec![
             SelectorItem {
@@ -102,8 +102,8 @@ pub fn build_status_selector(app: &App) -> Option<SelectorDef> {
     })
 }
 
-pub fn build_priority_selector(app: &App) -> Option<SelectorDef> {
-    let issue_id = app.current_issue_id()?;
+pub fn build_priority_selector(core: &Core) -> Option<SelectorDef> {
+    let issue_id = core.current_issue_id()?;
     Some(SelectorDef {
         items: (0..5)
             .map(|p| SelectorItem {
