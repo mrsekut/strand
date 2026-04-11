@@ -465,44 +465,13 @@ impl App {
         }
     }
 
-    /// 現在のview contextで対象となるissue_id + epic_idを返す
-    fn current_issue_id_with_epic(&self) -> Option<(String, Option<String>)> {
-        match &self.view {
-            View::EpicDetail {
-                children,
-                child_selected,
-                ..
-            } => {
-                let child = children.get(*child_selected)?;
-                let epic_id = self.find_parent_epic_id();
-                Some((child.id.clone(), epic_id))
-            }
-            View::IssueDetail { issue_id, .. } => {
-                let epic_id = self.find_parent_epic_id();
-                Some((issue_id.clone(), epic_id))
-            }
-            _ => self.selected_issue().map(|i| (i.id.clone(), None)),
-        }
-    }
-
-    /// 現在のview contextで対象となるIssueを返す
-    fn current_issue(&self) -> Option<Issue> {
-        match &self.view {
-            View::IssueDetail { issue_id, .. } => {
-                // issuesまたはスタック内のEpicDetailのchildrenから探す
-                self.issues
-                    .iter()
-                    .find(|i| i.id == *issue_id)
-                    .cloned()
-                    .or_else(|| self.find_issue_in_stack(issue_id))
-            }
-            View::EpicDetail {
-                children,
-                child_selected,
-                ..
-            } => children.get(*child_selected).cloned(),
-            _ => self.selected_issue().cloned(),
-        }
+    /// issue_id で Issue を検索する（top-level + 全 children）
+    pub fn find_issue(&self, issue_id: &str) -> Option<Issue> {
+        self.issues
+            .iter()
+            .find(|i| i.id == issue_id)
+            .cloned()
+            .or_else(|| self.find_issue_in_stack(issue_id))
     }
 
     /// スタック内のEpicDetailのchildrenからissueを探す
@@ -519,8 +488,8 @@ impl App {
 
     // --- Enrich ---
 
-    pub fn start_enrich(&mut self) {
-        let Some(issue) = self.current_issue() else {
+    pub fn start_enrich(&mut self, issue_id: &str) {
+        let Some(issue) = self.find_issue(issue_id) else {
             return;
         };
         self.enrich_manager.start(&issue, self.dir.clone());
@@ -549,8 +518,8 @@ impl App {
 
     // --- Split ---
 
-    pub fn start_split(&mut self) {
-        let Some(issue) = self.current_issue() else {
+    pub fn start_split(&mut self, issue_id: &str) {
+        let Some(issue) = self.find_issue(issue_id) else {
             return;
         };
         self.split_manager.start(&issue, self.dir.clone());
@@ -606,19 +575,15 @@ impl App {
         }
     }
 
-    pub async fn start_implement(&mut self) {
-        let Some(issue) = self.current_issue() else {
+    pub async fn start_implement(&mut self, issue_id: &str, epic_id: Option<&str>) {
+        let Some(issue) = self.find_issue(issue_id) else {
             return;
         };
-        let epic_id = self.find_parent_epic_id().or_else(|| match &self.view {
-            View::EpicDetail { epic_id, .. } => Some(epic_id.clone()),
-            _ => None,
-        });
 
         let repo_dir = self.repo_dir();
         if let Err(e) = self
             .impl_manager
-            .start(&issue, epic_id.as_deref(), &repo_dir, self.dir.clone())
+            .start(&issue, epic_id, &repo_dir, self.dir.clone())
             .await
         {
             self.notify(format!("Failed to start impl: {e}"));
@@ -644,11 +609,8 @@ impl App {
         }
     }
 
-    pub async fn merge_impl(&mut self) {
-        let Some((issue_id, epic_id)) = self.current_issue_id_with_epic() else {
-            return;
-        };
-
+    pub async fn merge_impl(&mut self, issue_id: &str) {
+        let epic_id = self.find_parent_epic_id();
         let repo_dir = self.repo_dir();
         if let Err(e) = self
             .impl_manager
@@ -669,13 +631,9 @@ impl App {
         self.reload_children().await;
     }
 
-    pub async fn discard_impl(&mut self) {
-        let Some(issue_id) = self.current_issue_id() else {
-            return;
-        };
-
+    pub async fn discard_impl(&mut self, issue_id: &str) {
         let repo_dir = self.repo_dir();
-        if let Err(e) = self.impl_manager.discard(&issue_id, &repo_dir).await {
+        if let Err(e) = self.impl_manager.discard(issue_id, &repo_dir).await {
             self.notify(format!("Discard failed: {e}"));
             return;
         }
@@ -683,29 +641,22 @@ impl App {
         self.notify(format!("Discarded: {issue_id}"));
     }
 
-    pub async fn retry_impl(&mut self) {
-        let Some(issue_id) = self.current_issue_id() else {
-            return;
-        };
-
+    pub async fn retry_impl(&mut self, issue_id: &str) {
         let repo_dir = self.repo_dir();
-        if let Err(e) = self.impl_manager.discard(&issue_id, &repo_dir).await {
+        if let Err(e) = self.impl_manager.discard(issue_id, &repo_dir).await {
             self.notify(format!("Retry failed (discard): {e}"));
             return;
         }
 
-        self.start_implement().await;
+        let epic_id = self.find_parent_epic_id();
+        self.start_implement(issue_id, epic_id.as_deref()).await;
     }
 
     // --- Set Status ---
 
-    pub async fn set_status(&mut self, status: &str) {
-        let Some(issue_id) = self.current_issue_id() else {
-            return;
-        };
-
+    pub async fn set_status(&mut self, issue_id: &str, status: &str) {
         if status == "closed" {
-            match bd::close_issue(self.dir.as_deref(), &issue_id).await {
+            match bd::close_issue(self.dir.as_deref(), issue_id).await {
                 Ok(_) => {
                     self.notify(format!("Closed: {issue_id}"));
                     let _ = self.load_issues().await;
@@ -719,7 +670,7 @@ impl App {
                 }
             }
         } else {
-            match bd::update_status(self.dir.as_deref(), &issue_id, status).await {
+            match bd::update_status(self.dir.as_deref(), issue_id, status).await {
                 Ok(_) => {
                     self.notify(format!("Status: {issue_id} → {status}"));
                     let _ = self.load_issues().await;
@@ -734,13 +685,8 @@ impl App {
 
     // --- Set Priority ---
 
-    pub async fn set_priority(&mut self, priority: u8) {
-        let Some(issue) = self.selected_issue() else {
-            return;
-        };
-        let issue_id = issue.id.clone();
-
-        match bd::update_priority(self.dir.as_deref(), &issue_id, priority).await {
+    pub async fn set_priority(&mut self, issue_id: &str, priority: u8) {
+        match bd::update_priority(self.dir.as_deref(), issue_id, priority).await {
             Ok(_) => {
                 self.notify(format!("Priority set: {issue_id} → P{priority}"));
                 let _ = self.load_issues().await;
@@ -753,11 +699,8 @@ impl App {
 
     // --- Copy ---
 
-    pub fn copy_resume_command(&mut self) {
-        let Some(issue_id) = self.current_issue_id() else {
-            return;
-        };
-        let Some(job) = self.impl_manager.get_job(&issue_id) else {
+    pub fn copy_resume_command(&mut self, issue_id: &str) {
+        let Some(job) = self.impl_manager.get_job(issue_id) else {
             self.notify("No impl job found");
             return;
         };
@@ -776,11 +719,8 @@ impl App {
         }
     }
 
-    pub fn copy_log_command(&mut self) {
-        let Some(issue_id) = self.current_issue_id() else {
-            return;
-        };
-        let Some(job) = self.impl_manager.get_job(&issue_id) else {
+    pub fn copy_log_command(&mut self, issue_id: &str) {
+        let Some(job) = self.impl_manager.get_job(issue_id) else {
             self.notify("No impl job found");
             return;
         };
@@ -792,11 +732,8 @@ impl App {
         }
     }
 
-    pub fn copy_worktree_path(&mut self) {
-        let Some(issue_id) = self.current_issue_id() else {
-            return;
-        };
-        let Some(job) = self.impl_manager.get_job(&issue_id) else {
+    pub fn copy_worktree_path(&mut self, issue_id: &str) {
+        let Some(job) = self.impl_manager.get_job(issue_id) else {
             self.notify("No impl job found");
             return;
         };
@@ -838,18 +775,11 @@ impl App {
     pub async fn edit_description(
         &mut self,
         terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+        issue_id: &str,
     ) {
-        // EpicDetailではepic自体を編集（子issueではなく）
-        let issue = match &self.view {
-            View::EpicDetail { epic_id, .. } => self
-                .issues
-                .iter()
-                .find(|i| i.id == *epic_id)
-                .cloned()
-                .or_else(|| self.find_issue_in_stack(epic_id)),
-            _ => self.current_issue(),
+        let Some(issue) = self.find_issue(issue_id) else {
+            return;
         };
-        let Some(issue) = issue else { return };
         let current_desc = issue.description.as_deref().unwrap_or_default();
 
         let result = crate::editor::open_editor(terminal, &issue.id, &issue.title, current_desc);
@@ -889,24 +819,18 @@ impl App {
 
     // --- Merge Epic ---
 
-    pub async fn merge_epic(&mut self) {
-        let (epic_id, unclosed) = match &self.view {
-            View::EpicDetail {
-                epic_id, children, ..
-            } => {
-                let unclosed: Vec<String> = children
-                    .iter()
-                    .filter(|c| c.status != "closed")
-                    .map(|c| c.id.clone())
-                    .collect();
-                (epic_id.clone(), unclosed)
+    pub async fn merge_epic(&mut self, epic_id: &str) {
+        // 子が全て closed か再確認
+        if let View::EpicDetail { children, .. } = &self.view {
+            let unclosed: Vec<String> = children
+                .iter()
+                .filter(|c| c.status != "closed")
+                .map(|c| c.id.clone())
+                .collect();
+            if !unclosed.is_empty() {
+                self.notify(format!("Unclosed children: {}", unclosed.join(", ")));
+                return;
             }
-            _ => return,
-        };
-
-        if !unclosed.is_empty() {
-            self.notify(format!("Unclosed children: {}", unclosed.join(", ")));
-            return;
         }
 
         let repo_dir = self.repo_dir();
@@ -977,52 +901,57 @@ impl App {
                 self.overlay = Overlay::None;
                 self.notification = None;
             }
-            AppAction::Confirm(confirm) => match confirm {
-                ConfirmAction::Merge => {
-                    self.merge_impl().await;
-                    if matches!(&self.view, View::IssueDetail { .. }) {
-                        self.back();
+            AppAction::Confirm(confirm) => {
+                let issue_id = self.current_issue_id().unwrap_or_default();
+                match confirm {
+                    ConfirmAction::Merge => {
+                        self.merge_impl(&issue_id).await;
+                        if matches!(&self.view, View::IssueDetail { .. }) {
+                            self.back();
+                        }
                     }
+                    ConfirmAction::Discard => self.discard_impl(&issue_id).await,
+                    ConfirmAction::MergeEpic => self.merge_epic(&issue_id).await,
+                    ConfirmAction::Retry => self.retry_impl(&issue_id).await,
                 }
-                ConfirmAction::Discard => self.discard_impl().await,
-                ConfirmAction::MergeEpic => self.merge_epic().await,
-                ConfirmAction::Retry => self.retry_impl().await,
-            },
+            }
 
             // ── AI workflows ──
-            AppAction::StartEnrich(_) => self.start_enrich(),
-            AppAction::StartImplement { .. } => self.start_implement().await,
-            AppAction::StartSplit(_) => self.start_split(),
+            AppAction::StartEnrich(id) => self.start_enrich(&id),
+            AppAction::StartImplement { issue_id, epic_id } => {
+                self.start_implement(&issue_id, epic_id.as_deref()).await;
+            }
+            AppAction::StartSplit(id) => self.start_split(&id),
 
             // ── Impl operations ──
-            AppAction::MergeImpl(_) => self.merge_impl().await,
-            AppAction::DiscardImpl(_) => self.discard_impl().await,
-            AppAction::RetryImpl(_) => self.retry_impl().await,
-            AppAction::MergeEpic(_) => self.merge_epic().await,
+            AppAction::MergeImpl(id) => self.merge_impl(&id).await,
+            AppAction::DiscardImpl(id) => self.discard_impl(&id).await,
+            AppAction::RetryImpl(id) => self.retry_impl(&id).await,
+            AppAction::MergeEpic(id) => self.merge_epic(&id).await,
 
             // ── State changes ──
-            AppAction::SetStatus { status, .. } => {
-                self.set_status(&status).await;
+            AppAction::SetStatus { issue_id, status } => {
+                self.set_status(&issue_id, &status).await;
                 if status == "closed" && matches!(&self.view, View::IssueDetail { .. }) {
                     self.back();
                 }
             }
-            AppAction::SetPriority { priority, .. } => {
-                self.set_priority(priority).await;
+            AppAction::SetPriority { issue_id, priority } => {
+                self.set_priority(&issue_id, priority).await;
             }
 
             // ── Editor ──
             AppAction::QuickCreate => self.quick_create_with_editor(terminal).await,
-            AppAction::EditDescription(_) => self.edit_description(terminal).await,
+            AppAction::EditDescription(id) => self.edit_description(terminal, &id).await,
 
             // ── Clipboard ──
             AppAction::CopyId(id) => match crate::clipboard::copy(&id) {
                 Ok(_) => self.notify(format!("Copied: {id}")),
                 Err(e) => self.notify(format!("Copy failed: {e}")),
             },
-            AppAction::CopyResumeCommand(_) => self.copy_resume_command(),
-            AppAction::CopyLogCommand(_) => self.copy_log_command(),
-            AppAction::CopyWorktreePath(_) => self.copy_worktree_path(),
+            AppAction::CopyResumeCommand(id) => self.copy_resume_command(&id),
+            AppAction::CopyLogCommand(id) => self.copy_log_command(&id),
+            AppAction::CopyWorktreePath(id) => self.copy_worktree_path(&id),
 
             // ── Filter ──
             AppAction::ClearFilter => {
