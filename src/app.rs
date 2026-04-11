@@ -753,16 +753,6 @@ impl App {
 
     // --- Copy ---
 
-    pub fn copy_id(&mut self) {
-        let Some(id) = self.current_issue_id() else {
-            return;
-        };
-        match crate::clipboard::copy(&id) {
-            Ok(_) => self.notify(format!("Copied: {id}")),
-            Err(e) => self.notify(format!("Copy failed: {e}")),
-        }
-    }
-
     pub fn copy_resume_command(&mut self) {
         let Some(issue_id) = self.current_issue_id() else {
             return;
@@ -969,8 +959,8 @@ impl App {
             // ── Navigation ──
             AppAction::Next => self.next(),
             AppAction::Previous => self.previous(),
-            AppAction::OpenDetail(id) => self.open_detail().await,
-            AppAction::OpenChildDetail(id) => self.open_child_detail().await,
+            AppAction::OpenDetail(_) => self.open_detail().await,
+            AppAction::OpenChildDetail(_) => self.open_child_detail().await,
             AppAction::Back => self.back(),
             AppAction::NavigateIssue { forward } => self.navigate_issue(forward).await,
 
@@ -1023,7 +1013,7 @@ impl App {
 
             // ── Editor ──
             AppAction::QuickCreate => self.quick_create_with_editor(terminal).await,
-            AppAction::EditDescription(id) => self.edit_description(terminal).await,
+            AppAction::EditDescription(_) => self.edit_description(terminal).await,
 
             // ── Clipboard ──
             AppAction::CopyId(id) => match crate::clipboard::copy(&id) {
@@ -1035,7 +1025,6 @@ impl App {
             AppAction::CopyWorktreePath(_) => self.copy_worktree_path(),
 
             // ── Filter ──
-            AppAction::SetFilter(_) => {} // TODO: used by ToggleSelector in future
             AppAction::ClearFilter => {
                 self.filter.clear();
                 self.selected = 0;

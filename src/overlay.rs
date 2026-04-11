@@ -18,10 +18,6 @@ pub enum Overlay {
 }
 
 impl Overlay {
-    pub fn is_active(&self) -> bool {
-        !matches!(self, Overlay::None)
-    }
-
     pub fn open_selector(def: SelectorDef) -> Self {
         Overlay::Selector(ExecuteSelector::from_def(def))
     }

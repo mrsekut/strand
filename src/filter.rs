@@ -8,8 +8,6 @@ pub struct Filter {
     pub statuses: HashSet<String>,
     pub labels: HashSet<String>,
     pub available_labels: Vec<String>,
-    pub status_cursor: usize,
-    pub label_cursor: usize,
 }
 
 impl Filter {
@@ -18,8 +16,6 @@ impl Filter {
             statuses: HashSet::new(),
             labels: HashSet::new(),
             available_labels: Vec::new(),
-            status_cursor: 0,
-            label_cursor: 0,
         }
     }
 
@@ -46,23 +42,6 @@ impl Filter {
         true
     }
 
-    pub fn toggle_status_at_cursor(&mut self) {
-        if let Some(s) = STATUSES.get(self.status_cursor) {
-            let s = s.to_string();
-            if !self.statuses.remove(&s) {
-                self.statuses.insert(s);
-            }
-        }
-    }
-
-    pub fn toggle_label_at_cursor(&mut self) {
-        if let Some(l) = self.available_labels.get(self.label_cursor).cloned() {
-            if !self.labels.remove(&l) {
-                self.labels.insert(l);
-            }
-        }
-    }
-
     pub fn clear(&mut self) {
         self.statuses.clear();
         self.labels.clear();
@@ -77,25 +56,6 @@ impl Filter {
             .cloned()
             .collect();
         self.available_labels = labels.into_iter().collect();
-        if self.label_cursor >= self.available_labels.len() {
-            self.label_cursor = 0;
-        }
-    }
-
-    /// HorizontalSelector用: statusの(label, selected)リスト
-    pub fn status_items(&self) -> Vec<(&str, bool)> {
-        STATUSES
-            .iter()
-            .map(|s| (*s, self.statuses.contains(*s)))
-            .collect()
-    }
-
-    /// HorizontalSelector用: labelの(label, selected)リスト
-    pub fn label_items(&self) -> Vec<(&str, bool)> {
-        self.available_labels
-            .iter()
-            .map(|l| (l.as_str(), self.labels.contains(l)))
-            .collect()
     }
 
     /// アクティブなフィルタの表示文字列
@@ -181,17 +141,6 @@ mod tests {
         // strand-unreadはフィルタ対象外
         assert!(!f.matches(&make_issue("open", &["strand-unread"])));
         assert!(f.matches(&make_issue("open", &["bug", "strand-unread"])));
-    }
-
-    #[test]
-    fn toggle_status() {
-        let mut f = Filter::new();
-        f.status_cursor = 0; // "open"
-        f.toggle_status_at_cursor();
-        assert!(f.statuses.contains("open"));
-
-        f.toggle_status_at_cursor();
-        assert!(!f.statuses.contains("open"));
     }
 
     #[test]

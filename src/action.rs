@@ -3,6 +3,7 @@ use crate::app::ConfirmAction;
 /// strand 上の全操作を表現するデータ型。
 /// キーハンドラはこれを返すだけ。実行は App::process_action() が行う。
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // variant は段階的に使用される
 pub enum AppAction {
     // ── Navigation ──
     Next,
@@ -55,7 +56,6 @@ pub enum AppAction {
     CopyWorktreePath(String),
 
     // ── Filter ──
-    SetFilter(FilterChange),
     ClearFilter,
     OpenFilterStatusToggle,
     OpenFilterLabelToggle,
@@ -78,10 +78,4 @@ pub struct SelectorItem {
     pub shortcut: String,
     pub label: String,
     pub action: AppAction,
-}
-
-#[derive(Debug, Clone)]
-pub enum FilterChange {
-    ToggleStatus(String),
-    ToggleLabel(String),
 }
