@@ -8,11 +8,12 @@ use ratatui::{
 use crate::ai::implement::ImplStatus;
 use crate::app::App;
 use crate::bd;
-use crate::core::{Overlay, View};
+use crate::core::View;
 use crate::ui::{
     draw_notification, execute_selector_line, format_timestamp, padded_keybar_line, priority_style,
     status_style, toggle_selector_line,
 };
+use crate::widget::keybar::KeyBar;
 
 fn child_icon(app: &App, issue: &bd::Issue, ready_ids: &HashSet<String>) -> (&'static str, Style) {
     if let Some(job) = app.impl_manager.get_job(&issue.id) {
@@ -170,11 +171,11 @@ pub fn draw(frame: &mut Frame, app: &App) {
 }
 
 fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
-    let line = match &app.core.overlay {
-        Overlay::Selector(sel) => execute_selector_line(&sel.items, sel.cursor),
-        Overlay::ToggleSelector(sel) => toggle_selector_line(&sel.items, sel.cursor),
-        Overlay::Confirm(action) => padded_keybar_line(&[("y", action.label()), ("n", "cancel")]),
-        Overlay::None => {
+    let line = match &app.core.keybar {
+        KeyBar::Selector(sel) => execute_selector_line(&sel.items, sel.cursor),
+        KeyBar::Toggle(sel) => toggle_selector_line(&sel.items, sel.cursor),
+        KeyBar::Confirm(action) => padded_keybar_line(&[("y", action.label()), ("n", "cancel")]),
+        KeyBar::Default => {
             let mut keys = vec![
                 ("Enter", "open issue"),
                 ("Esc", "back"),

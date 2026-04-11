@@ -1,22 +1,21 @@
 mod filter;
 mod issue_store;
-mod overlay;
 mod view;
 
 pub use filter::{Filter, STATUSES};
 pub use issue_store::IssueStore;
-pub use overlay::Overlay;
 pub use view::{ConfirmAction, View};
 
 use std::time::Instant;
 
 use crate::bd::Issue;
+use crate::widget::keybar::KeyBar;
 
 pub struct Core {
     pub issue_store: IssueStore,
     pub view: View,
     pub view_stack: Vec<View>,
-    pub overlay: Overlay,
+    pub keybar: KeyBar,
     pub filter: Filter,
     pub notification: Option<(String, Instant)>,
 }
@@ -27,7 +26,7 @@ impl Core {
             issue_store: IssueStore::new(),
             view: View::IssueList,
             view_stack: Vec::new(),
-            overlay: Overlay::None,
+            keybar: KeyBar::Default,
             filter: Filter::new(),
             notification: None,
         }

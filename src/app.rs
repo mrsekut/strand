@@ -8,7 +8,8 @@ use crate::ai::enrich::{self, EnrichManager, EnrichOutcome};
 use crate::ai::implement::{self, ImplManager, ImplOutcome, ImplStatus};
 use crate::ai::split::{self, SplitManager, SplitOutcome};
 use crate::bd::{self, Issue};
-use crate::core::{ConfirmAction, Core, Overlay, View};
+use crate::core::{ConfirmAction, Core, View};
+use crate::widget::keybar::KeyBar;
 
 pub struct App {
     pub core: Core,
@@ -794,18 +795,21 @@ impl App {
             AppAction::Back => self.back(),
             AppAction::NavigateIssue { forward } => self.navigate_issue(forward).await,
 
-            // ── Overlay ──
+            // ── KeyBar（セレクタ・確認） ──
             AppAction::OpenSelector(def) => {
-                self.core.overlay = Overlay::open_selector(def);
+                self.core.keybar = KeyBar::open_selector(def);
             }
             AppAction::OpenConfirm(confirm) => {
                 self.core.notification =
                     Some((confirm.confirm_message().into(), std::time::Instant::now()));
-                self.core.overlay = Overlay::Confirm(confirm);
+                self.core.keybar = KeyBar::Confirm(confirm);
             }
-            AppAction::CloseOverlay => {
-                self.core.overlay = Overlay::None;
+            AppAction::CloseOverlay | AppAction::CloseKeyBar => {
+                self.core.keybar = KeyBar::Default;
                 self.core.notification = None;
+            }
+            AppAction::SyncFilter => {
+                // handle_overlay_key 内で処理済み（3-3 で process_action に移動）
             }
             AppAction::Confirm(confirm) => {
                 let issue_id = self.current_issue_id().unwrap_or_default();
@@ -866,10 +870,6 @@ impl App {
             }
             AppAction::OpenFilterStatusToggle => crate::overlay::open_filter_status_toggle(self),
             AppAction::OpenFilterLabelToggle => crate::overlay::open_filter_label_toggle(self),
-
-            // ── KeyBar（3-2 で実装） ──
-            AppAction::CloseKeyBar => {}
-            AppAction::SyncFilter => {}
 
             // ── System ──
             AppAction::Notify(msg) => self.notify(msg),

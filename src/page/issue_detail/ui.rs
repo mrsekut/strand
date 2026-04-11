@@ -7,11 +7,12 @@ use chrono::{DateTime, FixedOffset};
 
 use crate::ai::implement::ImplStatus;
 use crate::app::App;
-use crate::core::{Overlay, View};
+use crate::core::View;
 use crate::ui::{
     draw_notification, execute_selector_line, format_timestamp, keybar_line, padded_keybar_line,
     priority_style, status_style, toggle_selector_line,
 };
+use crate::widget::keybar::KeyBar;
 
 pub fn draw(frame: &mut Frame, app: &App) {
     let (issue_id, scroll_offset, detail_diff) = match &app.core.view {
@@ -180,11 +181,11 @@ pub fn draw(frame: &mut Frame, app: &App) {
 }
 
 fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
-    let line = match &app.core.overlay {
-        Overlay::Selector(sel) => execute_selector_line(&sel.items, sel.cursor),
-        Overlay::ToggleSelector(sel) => toggle_selector_line(&sel.items, sel.cursor),
-        Overlay::Confirm(action) => padded_keybar_line(&[("y", action.label()), ("n", "cancel")]),
-        Overlay::None => padded_keybar_line(&[
+    let line = match &app.core.keybar {
+        KeyBar::Selector(sel) => execute_selector_line(&sel.items, sel.cursor),
+        KeyBar::Toggle(sel) => toggle_selector_line(&sel.items, sel.cursor),
+        KeyBar::Confirm(action) => padded_keybar_line(&[("y", action.label()), ("n", "cancel")]),
+        KeyBar::Default => padded_keybar_line(&[
             ("Esc", "back"),
             ("q", "create"),
             ("y", "copy id"),
