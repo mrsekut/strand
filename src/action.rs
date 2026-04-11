@@ -21,6 +21,10 @@ pub enum AppAction {
     CloseOverlay,
     Confirm(ConfirmAction),
 
+    // ── KeyBar ──
+    CloseKeyBar,
+    SyncFilter,
+
     // ── AI workflows ──
     StartEnrich(String),
     StartImplement {

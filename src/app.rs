@@ -867,6 +867,10 @@ impl App {
             AppAction::OpenFilterStatusToggle => crate::overlay::open_filter_status_toggle(self),
             AppAction::OpenFilterLabelToggle => crate::overlay::open_filter_label_toggle(self),
 
+            // ── KeyBar（3-2 で実装） ──
+            AppAction::CloseKeyBar => {}
+            AppAction::SyncFilter => {}
+
             // ── System ──
             AppAction::Notify(msg) => self.notify(msg),
             AppAction::ReloadIssues => {

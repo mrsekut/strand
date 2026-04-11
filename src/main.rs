@@ -9,6 +9,7 @@ mod overlay;
 mod page;
 mod selector;
 mod ui;
+mod widget;
 
 use std::io::stdout;
 use std::time::Duration;
