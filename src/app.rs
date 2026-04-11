@@ -256,53 +256,6 @@ impl App {
         self.start_implement(issue_id, epic_id.as_deref()).await;
     }
 
-    // --- Copy ---
-
-    pub fn copy_resume_command(&mut self, issue_id: &str) {
-        let Some(job) = self.impl_manager.get_job(issue_id) else {
-            self.notify("No impl job found");
-            return;
-        };
-        let Some(session_id) = &job.session_id else {
-            self.notify("No session ID available");
-            return;
-        };
-        let path = job.worktree_path.display();
-        let cmd = format!(
-            "cd {} && claude --dangerously-skip-permissions --resume {}",
-            path, session_id
-        );
-        match crate::clipboard::copy(&cmd) {
-            Ok(_) => self.notify(format!("Copied: {cmd}")),
-            Err(e) => self.notify(format!("Copy failed: {e}")),
-        }
-    }
-
-    pub fn copy_log_command(&mut self, issue_id: &str) {
-        let Some(job) = self.impl_manager.get_job(issue_id) else {
-            self.notify("No impl job found");
-            return;
-        };
-        let log_path = crate::ai::implement::run::log_file_path(&job.worktree_path);
-        let cmd = format!("tail -f {} | jq .", log_path.display());
-        match crate::clipboard::copy(&cmd) {
-            Ok(_) => self.notify(format!("Copied: {cmd}")),
-            Err(e) => self.notify(format!("Copy failed: {e}")),
-        }
-    }
-
-    pub fn copy_worktree_path(&mut self, issue_id: &str) {
-        let Some(job) = self.impl_manager.get_job(issue_id) else {
-            self.notify("No impl job found");
-            return;
-        };
-        let path = job.worktree_path.display().to_string();
-        match crate::clipboard::copy(&path) {
-            Ok(_) => self.notify(format!("Copied: {path}")),
-            Err(e) => self.notify(format!("Copy failed: {e}")),
-        }
-    }
-
     // --- Quick Create ---
 
     pub async fn quick_create_with_editor(
@@ -551,9 +504,13 @@ impl App {
                 Ok(_) => self.notify(format!("Copied: {id}")),
                 Err(e) => self.notify(format!("Copy failed: {e}")),
             },
-            AppAction::CopyResumeCommand(id) => self.copy_resume_command(&id),
-            AppAction::CopyLogCommand(id) => self.copy_log_command(&id),
-            AppAction::CopyWorktreePath(id) => self.copy_worktree_path(&id),
+            AppAction::CopyResumeCommand(id) => {
+                crate::action::clipboard::copy_resume_command(self, &id)
+            }
+            AppAction::CopyLogCommand(id) => crate::action::clipboard::copy_log_command(self, &id),
+            AppAction::CopyWorktreePath(id) => {
+                crate::action::clipboard::copy_worktree_path(self, &id)
+            }
 
             // ── Filter ──
             AppAction::ClearFilter => {

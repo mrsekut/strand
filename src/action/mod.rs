@@ -1,3 +1,4 @@
+pub mod clipboard;
 pub mod navigate;
 pub mod state;
 
