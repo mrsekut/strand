@@ -1,4 +1,5 @@
 pub mod clipboard;
+pub mod editor;
 pub mod navigate;
 pub mod state;
 

@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use ratatui::prelude::*;
 use tokio::sync::mpsc;
 
 use crate::ai::enrich::{self, EnrichManager, EnrichOutcome};
@@ -256,79 +255,6 @@ impl App {
         self.start_implement(issue_id, epic_id.as_deref()).await;
     }
 
-    // --- Quick Create ---
-
-    pub async fn quick_create_with_editor(
-        &mut self,
-        terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
-    ) {
-        let result = crate::editor::open_editor_for_create(terminal);
-
-        match result {
-            Ok(Some(create)) => match bd::quick_create(self.dir.as_deref(), &create.title).await {
-                Ok(id) => {
-                    self.notify(format!("Created: {id}"));
-                    let _ = self.load_issues().await;
-                    self.auto_enrich();
-                }
-                Err(e) => {
-                    self.notify(format!("Create failed: {e}"));
-                }
-            },
-            Ok(None) => {} // empty title or no changes
-            Err(e) => {
-                self.notify(format!("{e}"));
-            }
-        }
-    }
-
-    // --- Edit Description ---
-
-    pub async fn edit_description(
-        &mut self,
-        terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
-        issue_id: &str,
-    ) {
-        let Some(issue) = self.find_issue(issue_id) else {
-            return;
-        };
-        let current_desc = issue.description.as_deref().unwrap_or_default();
-
-        let result = crate::editor::open_editor(terminal, &issue.id, &issue.title, current_desc);
-
-        match result {
-            Ok(Some(edit)) => {
-                let mut ok = true;
-                if edit.title_changed {
-                    if let Err(e) =
-                        bd::update_title(self.dir.as_deref(), &edit.issue_id, &edit.new_title).await
-                    {
-                        self.notify(format!("Title update failed: {e}"));
-                        ok = false;
-                    }
-                }
-                if edit.desc_changed {
-                    if let Err(e) =
-                        bd::update_description(self.dir.as_deref(), &edit.issue_id, &edit.new_desc)
-                            .await
-                    {
-                        self.notify(format!("Description update failed: {e}"));
-                        ok = false;
-                    }
-                }
-                if ok {
-                    self.notify(format!("Updated: {}", edit.issue_id));
-                    let _ = self.load_issues().await;
-                    crate::action::navigate::reload_children(self).await;
-                }
-            }
-            Ok(None) => {} // no changes
-            Err(e) => {
-                self.notify(format!("{e}"));
-            }
-        }
-    }
-
     // --- Merge Epic ---
 
     pub async fn merge_epic(&mut self, epic_id: &str) {
@@ -496,8 +422,12 @@ impl App {
             }
 
             // ── Editor ──
-            AppAction::QuickCreate => self.quick_create_with_editor(terminal).await,
-            AppAction::EditDescription(id) => self.edit_description(terminal, &id).await,
+            AppAction::QuickCreate => {
+                crate::action::editor::quick_create_with_editor(self, terminal).await
+            }
+            AppAction::EditDescription(id) => {
+                crate::action::editor::edit_description(self, terminal, &id).await
+            }
 
             // ── Clipboard ──
             AppAction::CopyId(id) => match crate::clipboard::copy(&id) {
