@@ -150,7 +150,7 @@ async fn run(
                         }
                         let actions = dispatch_key(key.code, app);
                         for action in actions {
-                            app.process_action(action, terminal).await;
+                            action::process_action(app, action, terminal).await;
                         }
                     }
                     Some(Ok(_)) => {}
