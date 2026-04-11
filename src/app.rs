@@ -96,95 +96,6 @@ impl App {
         self.core.find_issue(issue_id)
     }
 
-    pub async fn merge_impl(&mut self, issue_id: &str) {
-        let epic_id = self.find_parent_epic_id();
-        let repo_dir = self.repo_dir();
-        if let Err(e) = self
-            .impl_manager
-            .merge(
-                &issue_id,
-                epic_id.as_deref(),
-                &repo_dir,
-                self.dir.as_deref(),
-            )
-            .await
-        {
-            self.notify(format!("Merge failed: {e}"));
-            return;
-        }
-
-        self.notify(format!("Merged & closed: {issue_id}"));
-        let _ = self.load_issues().await;
-        crate::action::navigate::reload_children(self).await;
-    }
-
-    pub async fn discard_impl(&mut self, issue_id: &str) {
-        let repo_dir = self.repo_dir();
-        if let Err(e) = self.impl_manager.discard(issue_id, &repo_dir).await {
-            self.notify(format!("Discard failed: {e}"));
-            return;
-        }
-
-        self.notify(format!("Discarded: {issue_id}"));
-    }
-
-    pub async fn retry_impl(&mut self, issue_id: &str) {
-        let repo_dir = self.repo_dir();
-        if let Err(e) = self.impl_manager.discard(issue_id, &repo_dir).await {
-            self.notify(format!("Retry failed (discard): {e}"));
-            return;
-        }
-
-        let epic_id = self.find_parent_epic_id();
-        crate::action::ai::start_implement(self, issue_id, epic_id.as_deref()).await;
-    }
-
-    // --- Merge Epic ---
-
-    pub async fn merge_epic(&mut self, epic_id: &str) {
-        // 子が全て closed か再確認
-        if let View::EpicDetail { children, .. } = &self.core.view {
-            let unclosed: Vec<String> = children
-                .iter()
-                .filter(|c| c.status != "closed")
-                .map(|c| c.id.clone())
-                .collect();
-            if !unclosed.is_empty() {
-                self.notify(format!("Unclosed children: {}", unclosed.join(", ")));
-                return;
-            }
-        }
-
-        let repo_dir = self.repo_dir();
-
-        match self
-            .impl_manager
-            .merge_epic(&epic_id, &repo_dir, self.dir.as_deref())
-            .await
-        {
-            Ok(_) => {
-                self.notify(format!("Merged & closed epic: {epic_id}"));
-            }
-            Err(e) => {
-                let msg = e.to_string();
-                if msg == "no_epic_branch" {
-                    self.notify(format!("No epic branch — closed: {epic_id}"));
-                } else {
-                    self.notify(format!("Epic merge failed: {e}"));
-                    return;
-                }
-            }
-        }
-
-        crate::action::navigate::back(&mut self.core);
-        let _ = self.load_issues().await;
-        if self.core.issue_store.selected >= self.core.issue_store.issues.len()
-            && self.core.issue_store.selected > 0
-        {
-            self.core.issue_store.selected -= 1;
-        }
-    }
-
     pub fn all_children_closed(&self) -> bool {
         self.core.all_children_closed()
     }
@@ -270,14 +181,20 @@ impl App {
                 let issue_id = self.current_issue_id().unwrap_or_default();
                 match confirm {
                     ConfirmAction::Merge => {
-                        self.merge_impl(&issue_id).await;
+                        crate::action::impl_ops::merge_impl(self, &issue_id).await;
                         if matches!(&self.core.view, View::IssueDetail { .. }) {
                             crate::action::navigate::back(&mut self.core);
                         }
                     }
-                    ConfirmAction::Discard => self.discard_impl(&issue_id).await,
-                    ConfirmAction::MergeEpic => self.merge_epic(&issue_id).await,
-                    ConfirmAction::Retry => self.retry_impl(&issue_id).await,
+                    ConfirmAction::Discard => {
+                        crate::action::impl_ops::discard_impl(self, &issue_id).await
+                    }
+                    ConfirmAction::MergeEpic => {
+                        crate::action::impl_ops::merge_epic(self, &issue_id).await
+                    }
+                    ConfirmAction::Retry => {
+                        crate::action::impl_ops::retry_impl(self, &issue_id).await
+                    }
                 }
             }
 
@@ -289,10 +206,10 @@ impl App {
             AppAction::StartSplit(id) => crate::action::ai::start_split(self, &id),
 
             // ── Impl operations ──
-            AppAction::MergeImpl(id) => self.merge_impl(&id).await,
-            AppAction::DiscardImpl(id) => self.discard_impl(&id).await,
-            AppAction::RetryImpl(id) => self.retry_impl(&id).await,
-            AppAction::MergeEpic(id) => self.merge_epic(&id).await,
+            AppAction::MergeImpl(id) => crate::action::impl_ops::merge_impl(self, &id).await,
+            AppAction::DiscardImpl(id) => crate::action::impl_ops::discard_impl(self, &id).await,
+            AppAction::RetryImpl(id) => crate::action::impl_ops::retry_impl(self, &id).await,
+            AppAction::MergeEpic(id) => crate::action::impl_ops::merge_epic(self, &id).await,
 
             // ── State changes ──
             AppAction::SetStatus { issue_id, status } => {

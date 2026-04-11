@@ -1,6 +1,7 @@
 pub mod ai;
 pub mod clipboard;
 pub mod editor;
+pub mod impl_ops;
 pub mod navigate;
 pub mod state;
 
