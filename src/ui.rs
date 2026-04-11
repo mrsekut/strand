@@ -7,13 +7,40 @@ use crate::app::App;
 use crate::bd::Issue;
 use crate::core::View;
 use crate::page;
+use crate::widget::keybar::KeyBar;
 
 pub fn draw(frame: &mut Frame, app: &App) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(1),    // ページコンテンツ
+            Constraint::Length(1), // KeyBar
+            Constraint::Length(1), // notification
+        ])
+        .split(frame.area());
+
+    // ページコンテンツ
     match &app.core.view {
-        View::IssueList => page::issue_list::ui::draw(frame, app),
-        View::IssueDetail { .. } => page::issue_detail::ui::draw(frame, app),
-        View::EpicDetail { .. } => page::epic_detail::ui::draw(frame, app),
+        View::IssueList => page::issue_list::ui::draw(frame, app, chunks[0]),
+        View::IssueDetail { .. } => page::issue_detail::ui::draw(frame, app, chunks[0]),
+        View::EpicDetail { .. } => page::epic_detail::ui::draw(frame, app, chunks[0]),
     }
+
+    // KeyBar
+    match &app.core.keybar {
+        KeyBar::Default => {
+            let line = match &app.core.view {
+                View::IssueList => page::issue_list::ui::key_hints(app),
+                View::IssueDetail { .. } => page::issue_detail::ui::key_hints(app),
+                View::EpicDetail { .. } => page::epic_detail::ui::key_hints(app),
+            };
+            frame.render_widget(Paragraph::new(line), chunks[1]);
+        }
+        keybar => keybar.render(chunks[1], frame),
+    }
+
+    // notification
+    draw_notification(frame, app, chunks[2]);
 }
 
 // --- Shared helpers ---
@@ -87,67 +114,7 @@ pub fn keybar_line(keys: &[(&str, &str)]) -> Line<'static> {
     Line::from(spans)
 }
 
-/// ExecuteSelector用: キーバー風セレクタ。カーソル位置をハイライト。
-pub fn execute_selector_line(
-    items: &[crate::action::SelectorItem],
-    cursor: usize,
-) -> Line<'static> {
-    let mut spans = vec![Span::raw(" ")];
-    for (i, item) in items.iter().enumerate() {
-        if i > 0 {
-            spans.push(Span::raw("  "));
-        }
-        let is_cursor = i == cursor;
-        let (key_style, desc_style) = if is_cursor {
-            (
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
-                Style::default()
-                    .fg(Color::White)
-                    .add_modifier(Modifier::UNDERLINED),
-            )
-        } else {
-            (
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-                Style::default().fg(Color::DarkGray),
-            )
-        };
-        spans.push(Span::styled(item.shortcut.clone(), key_style));
-        spans.push(Span::styled(format!(" {}", item.label), desc_style));
-    }
-    Line::from(spans)
-}
-
-/// ToggleSelector用: 選択状態を色で表現。カーソル位置をハイライト。
-pub fn toggle_selector_line(items: &[(String, bool)], cursor: usize) -> Line<'static> {
-    let mut spans = vec![Span::raw(" ")];
-    for (i, (label, selected)) in items.iter().enumerate() {
-        if i > 0 {
-            spans.push(Span::raw("  "));
-        }
-        let is_cursor = i == cursor;
-        let style = if is_cursor && *selected {
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
-        } else if is_cursor {
-            Style::default()
-                .fg(Color::White)
-                .add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
-        } else if *selected {
-            Style::default().fg(Color::Yellow)
-        } else {
-            Style::default().fg(Color::DarkGray)
-        };
-        spans.push(Span::styled(label.clone(), style));
-    }
-    Line::from(spans)
-}
-
-pub fn draw_notification(frame: &mut Frame, app: &App, area: Rect) {
+fn draw_notification(frame: &mut Frame, app: &App, area: Rect) {
     if let Some((msg, time)) = &app.core.notification {
         if time.elapsed().as_secs() < 5 {
             let status =

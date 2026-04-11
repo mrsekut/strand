@@ -8,13 +8,9 @@ use chrono::{DateTime, FixedOffset};
 use crate::ai::implement::ImplStatus;
 use crate::app::App;
 use crate::core::View;
-use crate::ui::{
-    draw_notification, execute_selector_line, format_timestamp, keybar_line, padded_keybar_line,
-    priority_style, status_style, toggle_selector_line,
-};
-use crate::widget::keybar::KeyBar;
+use crate::ui::{format_timestamp, keybar_line, padded_keybar_line, priority_style, status_style};
 
-pub fn draw(frame: &mut Frame, app: &App) {
+pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     let (issue_id, scroll_offset, detail_diff) = match &app.core.view {
         View::IssueDetail {
             issue_id,
@@ -43,16 +39,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
         None => return,
     };
 
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Min(1),
-            Constraint::Length(1),
-            Constraint::Length(1),
-        ])
-        .split(frame.area());
-
-    let content_area = chunks[0].inner(Margin {
+    let content_area = area.inner(Margin {
         horizontal: 2,
         vertical: 1,
     });
@@ -175,25 +162,15 @@ pub fn draw(frame: &mut Frame, app: &App) {
         .scroll((scroll_offset, 0));
 
     frame.render_widget(paragraph, content_area);
-
-    draw_keybar(frame, app, chunks[1]);
-    draw_notification(frame, app, chunks[2]);
 }
 
-fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
-    let line = match &app.core.keybar {
-        KeyBar::Selector(sel) => execute_selector_line(&sel.items, sel.cursor),
-        KeyBar::Toggle(sel) => toggle_selector_line(&sel.items, sel.cursor),
-        KeyBar::Confirm(action) => padded_keybar_line(&[("y", action.label()), ("n", "cancel")]),
-        KeyBar::Default => padded_keybar_line(&[
-            ("Esc", "back"),
-            ("q", "create"),
-            ("y", "copy id"),
-            ("e", "edit"),
-            ("a", "ai"),
-            ("s", "status"),
-        ]),
-    };
-
-    frame.render_widget(Paragraph::new(line), area);
+pub fn key_hints(_app: &App) -> Line<'static> {
+    padded_keybar_line(&[
+        ("Esc", "back"),
+        ("q", "create"),
+        ("y", "copy id"),
+        ("e", "edit"),
+        ("a", "ai"),
+        ("s", "status"),
+    ])
 }

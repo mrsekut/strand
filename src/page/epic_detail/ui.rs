@@ -9,11 +9,7 @@ use crate::ai::implement::ImplStatus;
 use crate::app::App;
 use crate::bd;
 use crate::core::View;
-use crate::ui::{
-    draw_notification, execute_selector_line, format_timestamp, padded_keybar_line, priority_style,
-    status_style, toggle_selector_line,
-};
-use crate::widget::keybar::KeyBar;
+use crate::ui::{format_timestamp, padded_keybar_line, priority_style, status_style};
 
 fn child_icon(app: &App, issue: &bd::Issue, ready_ids: &HashSet<String>) -> (&'static str, Style) {
     if let Some(job) = app.impl_manager.get_job(&issue.id) {
@@ -33,7 +29,7 @@ fn child_icon(app: &App, issue: &bd::Issue, ready_ids: &HashSet<String>) -> (&'s
     ("·", Style::default().fg(Color::DarkGray))
 }
 
-pub fn draw(frame: &mut Frame, app: &App) {
+pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     let (epic_id, children, ready_ids, child_selected, scroll_offset) = match &app.core.view {
         View::EpicDetail {
             epic_id,
@@ -70,17 +66,8 @@ pub fn draw(frame: &mut Frame, app: &App) {
         None => return,
     };
 
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Min(1),
-            Constraint::Length(1),
-            Constraint::Length(1),
-        ])
-        .split(frame.area());
-
     // Split content area: description (top) + child issue table (bottom)
-    let content_area = chunks[0].inner(Margin {
+    let content_area = area.inner(Margin {
         horizontal: 2,
         vertical: 1,
     });
@@ -165,40 +152,28 @@ pub fn draw(frame: &mut Frame, app: &App) {
 
         frame.render_stateful_widget(table, content_chunks[1], &mut state);
     }
-
-    draw_keybar(frame, app, chunks[1]);
-    draw_notification(frame, app, chunks[2]);
 }
 
-fn draw_keybar(frame: &mut Frame, app: &App, area: Rect) {
-    let line = match &app.core.keybar {
-        KeyBar::Selector(sel) => execute_selector_line(&sel.items, sel.cursor),
-        KeyBar::Toggle(sel) => toggle_selector_line(&sel.items, sel.cursor),
-        KeyBar::Confirm(action) => padded_keybar_line(&[("y", action.label()), ("n", "cancel")]),
-        KeyBar::Default => {
-            let mut keys = vec![
-                ("Enter", "open issue"),
-                ("Esc", "back"),
-                ("q", "create"),
-                ("y", "copy id"),
-                ("e", "edit"),
-                ("a", "ai"),
-                ("s", "status"),
-            ];
-            if let Some(issue_id) = app.current_issue_id() {
-                if let Some(job) = app.impl_manager.get_job(&issue_id) {
-                    keys.push(("p", "path"));
-                    if job.session_id.is_some() {
-                        keys.push(("c", "continue"));
-                    }
-                }
+pub fn key_hints(app: &App) -> Line<'static> {
+    let mut keys = vec![
+        ("Enter", "open issue"),
+        ("Esc", "back"),
+        ("q", "create"),
+        ("y", "copy id"),
+        ("e", "edit"),
+        ("a", "ai"),
+        ("s", "status"),
+    ];
+    if let Some(issue_id) = app.current_issue_id() {
+        if let Some(job) = app.impl_manager.get_job(&issue_id) {
+            keys.push(("p", "path"));
+            if job.session_id.is_some() {
+                keys.push(("c", "continue"));
             }
-            if app.all_children_closed() {
-                keys.push(("m", "merge to master"));
-            }
-            padded_keybar_line(&keys)
         }
-    };
-
-    frame.render_widget(Paragraph::new(line), area);
+    }
+    if app.all_children_closed() {
+        keys.push(("m", "merge to master"));
+    }
+    padded_keybar_line(&keys)
 }

@@ -3,7 +3,6 @@ use ratatui::{prelude::*, widgets::Paragraph};
 
 use crate::action::{AppAction, SelectorDef, SelectorItem};
 use crate::core::ConfirmAction;
-use crate::ui::{execute_selector_line, padded_keybar_line, toggle_selector_line};
 
 /// トグルセレクタの種別
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -163,14 +162,71 @@ impl KeyBar {
     pub fn render(&self, area: Rect, frame: &mut Frame) {
         let line = match self {
             KeyBar::Default => return,
-            KeyBar::Selector(sel) => execute_selector_line(&sel.items, sel.cursor),
-            KeyBar::Toggle(sel) => toggle_selector_line(&sel.items, sel.cursor),
+            KeyBar::Selector(sel) => selector_line(&sel.items, sel.cursor),
+            KeyBar::Toggle(sel) => toggle_line(&sel.items, sel.cursor),
             KeyBar::Confirm(action) => {
-                padded_keybar_line(&[("y", action.label()), ("n", "cancel")])
+                crate::ui::padded_keybar_line(&[("y", action.label()), ("n", "cancel")])
             }
         };
         frame.render_widget(Paragraph::new(line), area);
     }
+}
+
+// --- 描画ヘルパー ---
+
+fn selector_line(items: &[SelectorItem], cursor: usize) -> Line<'static> {
+    let mut spans = vec![Span::raw(" ")];
+    for (i, item) in items.iter().enumerate() {
+        if i > 0 {
+            spans.push(Span::raw("  "));
+        }
+        let is_cursor = i == cursor;
+        let (key_style, desc_style) = if is_cursor {
+            (
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::UNDERLINED),
+            )
+        } else {
+            (
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+                Style::default().fg(Color::DarkGray),
+            )
+        };
+        spans.push(Span::styled(item.shortcut.clone(), key_style));
+        spans.push(Span::styled(format!(" {}", item.label), desc_style));
+    }
+    Line::from(spans)
+}
+
+fn toggle_line(items: &[(String, bool)], cursor: usize) -> Line<'static> {
+    let mut spans = vec![Span::raw(" ")];
+    for (i, (label, selected)) in items.iter().enumerate() {
+        if i > 0 {
+            spans.push(Span::raw("  "));
+        }
+        let is_cursor = i == cursor;
+        let style = if is_cursor && *selected {
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
+        } else if is_cursor {
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
+        } else if *selected {
+            Style::default().fg(Color::Yellow)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+        spans.push(Span::styled(label.clone(), style));
+    }
+    Line::from(spans)
 }
 
 #[cfg(test)]
