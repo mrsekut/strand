@@ -12,7 +12,7 @@ pub async fn quick_create_with_editor(
     let result = crate::editor::open_editor_for_create(terminal);
 
     match result {
-        Ok(Some(create)) => match bd::quick_create(None, &create.title).await {
+        Ok(Some(create)) => match bd::quick_create(None, &create.title, &create.description).await {
             Ok(id) => {
                 core.notify(format!("Created: {id}"));
                 let _ = core.load_issues().await;

@@ -39,7 +39,7 @@ async fn main() -> Result<()> {
             .get(2)
             .ok_or_else(|| anyhow::anyhow!("Usage: strand q <title>"))?;
         bd::check_init(None).await?;
-        let id = bd::quick_create(None, title).await?;
+        let id = bd::quick_create(None, title, "").await?;
         println!("{id}");
         return Ok(());
     }

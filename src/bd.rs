@@ -253,13 +253,24 @@ pub async fn create_child(
 }
 
 /// Quick capture: task, P2 で issue を作成し、strand-needs-enrichラベルを付与してIDを返す
-pub async fn quick_create(dir: Option<&str>, title: &str) -> Result<String> {
-    let stdout = run_bd(
-        dir,
-        ["q", title, "--type", "task", "--priority", "2"].as_slice(),
-    )
-    .await?;
-    let id = String::from_utf8_lossy(&stdout).trim().to_string();
+pub async fn quick_create(dir: Option<&str>, title: &str, description: &str) -> Result<String> {
+    let mut args = vec!["create", "--title", title, "--type", "task", "--priority", "2"];
+    if !description.is_empty() {
+        args.extend(["--description", description]);
+    }
+    let stdout = run_bd(dir, &args).await?;
+    let output = String::from_utf8_lossy(&stdout);
+    let id = output
+        .lines()
+        .find_map(|line| line.strip_prefix("✓ Created issue: "))
+        .or_else(|| {
+            output
+                .lines()
+                .find_map(|line| line.strip_prefix("Created issue: "))
+        })
+        .unwrap_or(output.trim())
+        .trim()
+        .to_string();
     add_label(dir, &id, "strand-needs-enrich").await?;
     Ok(id)
 }

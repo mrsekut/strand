@@ -10,6 +10,7 @@ use ratatui::prelude::*;
 /// エディタで新規作成された結果
 pub struct CreateResult {
     pub title: String,
+    pub description: String,
 }
 
 /// エディタを起動してissueのタイトルを入力させる（quick create用）。
@@ -38,7 +39,14 @@ pub fn open_editor_for_create(
             if title.is_empty() {
                 None
             } else {
-                Some(CreateResult { title })
+                let description = content
+                    .lines()
+                    .skip(1)
+                    .collect::<Vec<_>>()
+                    .join("\n")
+                    .trim()
+                    .to_string();
+                Some(CreateResult { title, description })
             }
         }
         _ => {
