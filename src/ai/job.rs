@@ -109,7 +109,7 @@ pub fn spawn_detached(
     let stdout_file = fs::File::create(stdout_path).context("failed to create stdout file")?;
     let stderr_file = fs::File::create(stderr_path).context("failed to create stderr file")?;
 
-    let child = unsafe {
+    let mut child = unsafe {
         Command::new(&args[0])
             .args(&args[1..])
             .current_dir(cwd)
@@ -124,7 +124,14 @@ pub fn spawn_detached(
             .context("failed to spawn detached process")?
     };
 
-    Ok(child.id())
+    let pid = child.id();
+
+    // ゾンビ防止: 別スレッドで wait() してプロセスを回収する
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+
+    Ok(pid)
 }
 
 // --- PID 管理 ---
