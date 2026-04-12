@@ -1,3 +1,4 @@
+pub mod handler;
 mod manager;
 mod merge;
 pub mod run;

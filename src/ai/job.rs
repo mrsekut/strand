@@ -47,11 +47,13 @@ pub struct SetupContext {
 /// workflow 固有のロジックを定義する trait
 pub trait WorkflowHandler: Send + Sync + 'static {
     type Event: Send + 'static;
+    /// workflow 開始時に渡す追加設定（impl: epic_id 等、enrich/split: ()）
+    type Config: Send + 'static;
 
     fn workflow_name(&self) -> &str;
 
     /// claude に渡すコマンドライン引数を構築
-    fn build_command(&self, issue: &Issue) -> Vec<String>;
+    fn build_command(&self, issue: &Issue, config: &Self::Config) -> Vec<String>;
 
     /// claude を実行するディレクトリ
     fn working_dir(&self, meta: &JobMeta) -> PathBuf;
@@ -60,6 +62,7 @@ pub trait WorkflowHandler: Send + Sync + 'static {
     fn setup(
         &self,
         issue: &Issue,
+        config: &Self::Config,
     ) -> impl std::future::Future<Output = Result<SetupContext>> + Send;
 
     /// 開始イベントを生成
@@ -197,6 +200,7 @@ pub fn parse_output(output_path: &Path) -> Option<ResultData> {
 pub async fn start_job<W: WorkflowHandler>(
     handler: &Arc<W>,
     issue: &Issue,
+    config: &W::Config,
     tx: &mpsc::Sender<W::Event>,
 ) -> Result<ActiveJob> {
     let jobs_dir = ensure_strand_dir()?;
@@ -209,7 +213,7 @@ pub async fn start_job<W: WorkflowHandler>(
     }
 
     // セットアップ（impl: worktree 作成）
-    let setup_ctx = handler.setup(issue).await?;
+    let setup_ctx = handler.setup(issue, config).await?;
 
     // job ディレクトリ作成
     fs::create_dir_all(&job_dir)?;
@@ -224,7 +228,7 @@ pub async fn start_job<W: WorkflowHandler>(
     write_meta(&job_dir, &meta)?;
 
     // コマンド構築 + デタッチ起動
-    let args = handler.build_command(issue);
+    let args = handler.build_command(issue, config);
     let cwd = handler.working_dir(&meta);
     let stdout_path = job_dir.join("output.jsonl");
     let stderr_path = job_dir.join("stderr.log");
