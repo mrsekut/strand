@@ -47,6 +47,14 @@ impl WorkflowHandler for ImplHandler {
 
     async fn setup(&self, issue: &Issue, config: &ImplConfig) -> Result<SetupContext> {
         let repo_dir = Core::repo_dir();
+        let wt_path = worktree::worktree_path(&repo_dir, &issue.id);
+
+        // w キーで既にworktreeが作られている場合は再利用
+        if wt_path.exists() {
+            return Ok(SetupContext {
+                worktree_path: Some(wt_path.to_string_lossy().to_string()),
+            });
+        }
 
         let base_branch = if let Some(eid) = &config.epic_id {
             worktree::ensure_epic_branch(&repo_dir, eid).await?
