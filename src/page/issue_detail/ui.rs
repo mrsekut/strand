@@ -132,7 +132,6 @@ pub fn draw(frame: &mut Frame, core: &Core, impl_manager: &ImplManager, area: Re
         if job.session_id.is_some() {
             impl_keys.push(("c", "continue"));
         }
-        impl_keys.push(("l", "log"));
         if !impl_keys.is_empty() {
             lines.push(keybar_line(&impl_keys));
         }

@@ -64,7 +64,6 @@ pub enum AppAction {
     // ── Clipboard ──
     CopyId(String),
     CopyResumeCommand(String),
-    CopyLogCommand(String),
     CopyWorktreePath(String),
 
     // ── Filter ──
@@ -172,7 +171,6 @@ pub async fn process_action(
             Err(e) => core.notify(format!("Copy failed: {e}")),
         },
         AppAction::CopyResumeCommand(id) => clipboard::copy_resume_command(core, ai, &id),
-        AppAction::CopyLogCommand(id) => clipboard::copy_log_command(core, ai, &id),
         AppAction::CopyWorktreePath(id) => clipboard::copy_worktree_path(core, ai, &id),
 
         // ── Filter ──
