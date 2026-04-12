@@ -29,8 +29,8 @@ Issue Title: {title}{description_section}
 
 Please provide:
 
-1. **課題 (Problems)**: Bullet-point list of the core problems. Each bullet should be one concise sentence.
-2. **ソリューション案 (Solutions)**: 2-3 concrete solution approaches, each with a short label (A, B, C...) and a brief description.
+1. **Issues**: Bullet-point list of the core problems. Each bullet should be one concise sentence.
+2. **Solutions**: 2-3 concrete solution approaches, each with a short label (A, B, C...) and a brief description.
 
 Respond in JSON format exactly matching this structure:
 {{
@@ -95,12 +95,12 @@ pub fn format_enriched(original: Option<&str>, result: &EnrichResult) -> String 
         out.push_str("\n\n---\n");
     }
 
-    out.push_str("### 課題\n");
+    out.push_str("### Issues\n");
     for p in &result.problems {
         out.push_str(&format!("- {p}\n"));
     }
 
-    out.push_str("\n### ソリューション案\n");
+    out.push_str("\n### Solutions\n");
     for s in &result.solutions {
         out.push_str(&format!("- {}: {}\n", s.label, s.title));
         out.push_str(&format!("  {}\n", s.description));
@@ -173,8 +173,8 @@ mod tests {
         };
         let text = format_enriched(Some("Original desc"), &result);
         assert!(text.starts_with("Original desc\n\n---\n"));
-        assert!(text.contains("### 課題\n- Problem 1\n- Problem 2"));
-        assert!(text.contains("### ソリューション案\n- A: Sol A\n  Do A"));
+        assert!(text.contains("### Issues\n- Problem 1\n- Problem 2"));
+        assert!(text.contains("### Solutions\n- A: Sol A\n  Do A"));
     }
 
     #[test]
@@ -195,7 +195,7 @@ mod tests {
             ],
         };
         let text = format_enriched(None, &result);
-        assert!(text.starts_with("### 課題"));
+        assert!(text.starts_with("### Issues"));
         assert!(text.contains("- A: Sol A\n  Do A"));
         assert!(text.contains("- B: Sol B\n  Do B"));
     }
