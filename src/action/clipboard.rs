@@ -23,10 +23,10 @@ pub fn copy_resume_command(core: &mut Core, ai: &AiManagers, issue_id: &str) {
 }
 
 pub fn copy_log_command(core: &mut Core, ai: &AiManagers, issue_id: &str) {
-    let Some(job) = ai.impl_.get_job(issue_id) else {
+    if ai.impl_.get_job(issue_id).is_none() {
         core.notify("No impl job found");
         return;
-    };
+    }
     let jobs_dir = match job::ensure_strand_dir() {
         Ok(d) => d,
         Err(_) => {

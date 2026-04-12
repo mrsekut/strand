@@ -55,25 +55,6 @@ Important:
     )
 }
 
-/// claude -p --output-format json のラッパー構造
-#[derive(Debug, Deserialize)]
-struct ClaudeResponse {
-    result: String,
-}
-
-pub fn parse_text_result(json_str: &str) -> Result<String> {
-    let wrapper: ClaudeResponse = serde_json::from_str(json_str)?;
-    Ok(wrapper.result)
-}
-
-pub fn parse_result(json_str: &str) -> Result<EnrichResult> {
-    let wrapper: ClaudeResponse = serde_json::from_str(json_str)?;
-    let inner = extract_json(&wrapper.result)?;
-    let result: EnrichResult = serde_json::from_str(inner)?;
-    Ok(result)
-}
-
-/// ResultData.result（ラッパーなしの生テキスト）からパース
 pub fn parse_result_from_text(text: &str) -> Result<EnrichResult> {
     let inner = extract_json(text)?;
     let result: EnrichResult = serde_json::from_str(inner)?;
@@ -135,7 +116,6 @@ mod tests {
     #[test]
     fn build_prompt_title_only() {
         let request = EnrichRequest {
-            issue_id: "beads-001".to_string(),
             title: "Fix login bug".to_string(),
             description: None,
         };
@@ -147,7 +127,6 @@ mod tests {
     #[test]
     fn build_prompt_with_description() {
         let request = EnrichRequest {
-            issue_id: "beads-001".to_string(),
             title: "Fix login bug".to_string(),
             description: Some("Users cannot log in".to_string()),
         };
@@ -159,12 +138,8 @@ mod tests {
 
     #[test]
     fn parse_result_valid_json() {
-        let inner = r#"{"problems":["Problem 1","Problem 2"],"solutions":[{"label":"A","title":"Solution A","description":"Do A"}]}"#;
-        let json = format!(
-            r#"{{"type":"result","result":{}}}"#,
-            serde_json::to_string(inner).unwrap()
-        );
-        let result = parse_result(&json).unwrap();
+        let text = r#"{"problems":["Problem 1","Problem 2"],"solutions":[{"label":"A","title":"Solution A","description":"Do A"}]}"#;
+        let result = parse_result_from_text(text).unwrap();
         assert_eq!(result.problems, vec!["Problem 1", "Problem 2"]);
         assert_eq!(result.solutions.len(), 1);
         assert_eq!(result.solutions[0].label, "A");
@@ -175,19 +150,15 @@ mod tests {
     fn parse_result_with_markdown_fences() {
         let inner_json =
             r#"{"problems":["P1"],"solutions":[{"label":"A","title":"Sol","description":"Desc"}]}"#;
-        let fenced = format!("```json\n{inner_json}\n```");
-        let json = format!(
-            r#"{{"type":"result","result":{}}}"#,
-            serde_json::to_string(&fenced).unwrap()
-        );
-        let result = parse_result(&json).unwrap();
+        let text = format!("```json\n{inner_json}\n```");
+        let result = parse_result_from_text(&text).unwrap();
         assert_eq!(result.problems, vec!["P1"]);
     }
 
     #[test]
     fn parse_result_invalid_json() {
-        let json = "not valid json";
-        assert!(parse_result(json).is_err());
+        let text = "not valid json";
+        assert!(parse_result_from_text(text).is_err());
     }
 
     #[test]

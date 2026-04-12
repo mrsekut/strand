@@ -79,7 +79,7 @@ impl EnrichManager {
     pub async fn restore_jobs(&mut self) {
         let active_jobs = job::restore_jobs(&self.handler, &self.tx).await;
         for aj in &active_jobs {
-            self.enriching_ids.insert(aj.meta.issue_id.clone());
+            self.enriching_ids.insert(aj.issue_id.clone());
         }
     }
 

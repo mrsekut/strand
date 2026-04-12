@@ -23,7 +23,6 @@ impl WorkflowHandler for EnrichHandler {
         let prompt_text = match std::env::var("STRAND_ENRICH_SKILL").ok() {
             Some(skill_name) => build_skill_prompt(issue, &skill_name),
             None => prompt::build_prompt(&super::EnrichRequest {
-                issue_id: issue.id.clone(),
                 title: issue.title.clone(),
                 description: issue.description.clone(),
             }),

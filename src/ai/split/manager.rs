@@ -63,7 +63,7 @@ impl SplitManager {
     pub async fn restore_jobs(&mut self) {
         let active_jobs = job::restore_jobs(&self.handler, &self.tx).await;
         for aj in &active_jobs {
-            self.splitting_ids.insert(aj.meta.issue_id.clone());
+            self.splitting_ids.insert(aj.issue_id.clone());
         }
     }
 

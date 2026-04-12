@@ -44,24 +44,21 @@ impl ImplManager {
         // 新方式: .strand/jobs/ からの復元
         let active_jobs = job::restore_jobs(&self.handler, &self.tx).await;
         for aj in &active_jobs {
-            let branch = branch_name(&aj.meta.issue_id);
+            let branch = branch_name(&aj.issue_id);
             let wt_path = aj
-                .meta
                 .worktree_path
                 .as_ref()
                 .map(std::path::PathBuf::from)
-                .unwrap_or_else(|| worktree::worktree_path(repo_dir, &aj.meta.issue_id));
+                .unwrap_or_else(|| worktree::worktree_path(repo_dir, &aj.issue_id));
 
-            self.jobs
-                .entry(aj.meta.issue_id.clone())
-                .or_insert(ImplJob {
-                    issue_id: aj.meta.issue_id.clone(),
-                    branch,
-                    worktree_path: wt_path,
-                    status: ImplStatus::Running,
-                    completed_at: None,
-                    session_id: None,
-                });
+            self.jobs.entry(aj.issue_id.clone()).or_insert(ImplJob {
+                issue_id: aj.issue_id.clone(),
+                branch,
+                worktree_path: wt_path,
+                status: ImplStatus::Running,
+                completed_at: None,
+                session_id: None,
+            });
         }
 
         // 旧方式: worktree からの復元（互換性）
@@ -87,11 +84,10 @@ impl ImplManager {
             epic_id: epic_id.map(|s| s.to_string()),
         };
 
-        let active_job = job::start_job(&self.handler, issue, &config, &self.tx).await?;
+        let job_meta = job::start_job(&self.handler, issue, &config, &self.tx).await?;
 
         let branch = branch_name(&issue.id);
-        let wt_path = active_job
-            .meta
+        let wt_path = job_meta
             .worktree_path
             .as_ref()
             .map(std::path::PathBuf::from)

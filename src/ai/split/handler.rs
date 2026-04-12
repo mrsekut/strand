@@ -21,7 +21,6 @@ impl WorkflowHandler for SplitHandler {
 
     fn build_command(&self, issue: &Issue, _config: &()) -> Vec<String> {
         let prompt_text = prompt::build_prompt(&super::SplitRequest {
-            issue_id: issue.id.clone(),
             title: issue.title.clone(),
             description: issue.description.clone(),
         });

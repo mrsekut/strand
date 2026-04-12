@@ -50,20 +50,6 @@ Important:
     )
 }
 
-/// claude -p --output-format json のラッパー構造
-#[derive(Debug, Deserialize)]
-struct ClaudeResponse {
-    result: String,
-}
-
-pub fn parse_result(json_str: &str) -> Result<SplitResult> {
-    let wrapper: ClaudeResponse = serde_json::from_str(json_str)?;
-    let inner = extract_json(&wrapper.result)?;
-    let result: SplitResult = serde_json::from_str(inner)?;
-    Ok(result)
-}
-
-/// ResultData.result（ラッパーなしの生テキスト）からパース
 pub fn parse_result_from_text(text: &str) -> Result<SplitResult> {
     let inner = extract_json(text)?;
     let result: SplitResult = serde_json::from_str(inner)?;

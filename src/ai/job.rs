@@ -30,13 +30,6 @@ pub struct JobMeta {
     pub started_at: String,
 }
 
-/// 実行中または完了済みのジョブ
-pub struct ActiveJob {
-    pub meta: JobMeta,
-    pub job_dir: PathBuf,
-    pub pid: u32,
-}
-
 /// setup() の戻り値
 pub struct SetupContext {
     pub worktree_path: Option<String>,
@@ -202,7 +195,7 @@ pub async fn start_job<W: WorkflowHandler>(
     issue: &Issue,
     config: &W::Config,
     tx: &mpsc::Sender<W::Event>,
-) -> Result<ActiveJob> {
+) -> Result<JobMeta> {
     let jobs_dir = ensure_strand_dir()?;
     let short_id = crate::bd::short_id(&issue.id);
     let job_dir = job_dir_path(&jobs_dir, handler.workflow_name(), short_id);
@@ -247,7 +240,7 @@ pub async fn start_job<W: WorkflowHandler>(
         tx.clone(),
     );
 
-    Ok(ActiveJob { meta, job_dir, pid })
+    Ok(meta)
 }
 
 /// monitor タスクを起動する
@@ -303,7 +296,7 @@ async fn monitor_job<W: WorkflowHandler>(
 pub async fn restore_jobs<W: WorkflowHandler>(
     handler: &Arc<W>,
     tx: &mpsc::Sender<W::Event>,
-) -> Vec<ActiveJob> {
+) -> Vec<JobMeta> {
     let jobs_dir = match ensure_strand_dir() {
         Ok(d) => d,
         Err(_) => return vec![],
@@ -351,11 +344,7 @@ pub async fn restore_jobs<W: WorkflowHandler>(
                 tx.clone(),
             );
 
-            jobs.push(ActiveJob {
-                meta,
-                job_dir: path,
-                pid,
-            });
+            jobs.push(meta);
         } else {
             // 死んでる → 結果を処理
             let output_path = path.join("output.jsonl");
