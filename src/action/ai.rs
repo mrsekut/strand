@@ -100,6 +100,7 @@ pub fn handle_impl_event(core: &mut Core, ai: &mut AiManagers, event: implement:
         ImplOutcome::Started { issue_id } => {
             core.notify(format!("Implementing: {issue_id}..."));
         }
+        ImplOutcome::SessionIdDiscovered { .. } => {}
         ImplOutcome::Completed { issue_id, summary } => {
             core.notify(format!(
                 "Implementation done: {issue_id} (log: {} bytes)",

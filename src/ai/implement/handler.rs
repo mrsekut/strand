@@ -88,6 +88,13 @@ impl WorkflowHandler for ImplHandler {
             session_id: None,
         }
     }
+
+    fn on_session_id_discovered(&self, issue_id: &str, session_id: String) -> Option<ImplEvent> {
+        Some(ImplEvent::SessionIdDiscovered {
+            issue_id: issue_id.to_string(),
+            session_id,
+        })
+    }
 }
 
 fn build_prompt(issue: &Issue) -> String {

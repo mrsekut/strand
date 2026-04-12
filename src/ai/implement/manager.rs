@@ -16,6 +16,7 @@ use super::{ImplJob, ImplStatus, branch_name};
 /// handle_eventの結果。app側が必要なアクションを判断するために使う。
 pub enum ImplOutcome {
     Started { issue_id: String },
+    SessionIdDiscovered { _issue_id: String },
     Completed { issue_id: String, summary: String },
     Failed { issue_id: String, error: String },
 }
@@ -160,6 +161,17 @@ impl ImplManager {
     pub fn handle_event(&mut self, event: ImplEvent, _dir: &str) -> ImplOutcome {
         match event {
             ImplEvent::Started { issue_id } => ImplOutcome::Started { issue_id },
+            ImplEvent::SessionIdDiscovered {
+                issue_id,
+                session_id,
+            } => {
+                if let Some(job) = self.jobs.get_mut(&issue_id) {
+                    job.session_id = Some(session_id);
+                }
+                ImplOutcome::SessionIdDiscovered {
+                    _issue_id: issue_id,
+                }
+            }
             ImplEvent::Completed {
                 issue_id,
                 summary,

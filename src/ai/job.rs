@@ -70,6 +70,15 @@ pub trait WorkflowHandler: Send + Sync + 'static {
 
     /// 失敗時
     fn on_failed(&self, issue_id: &str, error: String) -> Self::Event;
+
+    /// session_id 早期発見時（デフォルト: 何もしない）
+    fn on_session_id_discovered(
+        &self,
+        _issue_id: &str,
+        _session_id: String,
+    ) -> Option<Self::Event> {
+        None
+    }
 }
 
 // --- .strand/ ディレクトリ管理 ---
@@ -194,6 +203,17 @@ pub fn parse_output(output_path: &Path) -> Option<ResultData> {
     last_result
 }
 
+/// output.jsonl の先頭行から session_id を抽出する
+pub fn parse_early_session_id(output_path: &Path) -> Option<String> {
+    let file = fs::File::open(output_path).ok()?;
+    let reader = BufReader::new(file);
+    let first_line = reader.lines().next()?.ok()?;
+    let v: serde_json::Value = serde_json::from_str(&first_line).ok()?;
+    v.get("session_id")
+        .and_then(|s| s.as_str())
+        .map(|s| s.to_string())
+}
+
 // --- 高レベル操作 ---
 
 /// ジョブを開始する（全 workflow 共通）
@@ -269,6 +289,8 @@ async fn monitor_job<W: WorkflowHandler>(
     issue_id: &str,
     tx: &mpsc::Sender<W::Event>,
 ) {
+    let mut session_id_sent = false;
+
     loop {
         tokio::time::sleep(Duration::from_secs(2)).await;
 
@@ -276,6 +298,17 @@ async fn monitor_job<W: WorkflowHandler>(
             Ok(p) => p,
             Err(_) => break,
         };
+
+        // session_id の早期取得（1回だけ）
+        if !session_id_sent {
+            let output_path = job_dir.join("output.jsonl");
+            if let Some(sid) = parse_early_session_id(&output_path) {
+                if let Some(event) = handler.on_session_id_discovered(issue_id, sid) {
+                    let _ = tx.send(event).await;
+                }
+                session_id_sent = true;
+            }
+        }
 
         if is_alive(pid) {
             continue;
