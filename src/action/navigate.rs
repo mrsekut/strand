@@ -243,7 +243,7 @@ async fn rebase_impl(core: &mut Core, ai: &AiManagers, issue_id: &str) {
 fn target_branch_for(core: &Core, _issue_id: &str) -> String {
     core.find_parent_epic_id()
         .map(|eid| implement::epic_branch_name(&eid))
-        .unwrap_or_else(|| "master".to_string())
+        .unwrap_or_else(|| core.default_branch.clone())
 }
 
 async fn compute_diff(core: &Core, ai: &AiManagers, issue_id: &str) -> Option<Vec<u8>> {

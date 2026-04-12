@@ -60,7 +60,8 @@ pub async fn ensure_epic_branch(repo_dir: &Path, epic_id: &str) -> Result<String
         return Ok(branch);
     }
 
-    run_git(repo_dir, &["branch", &branch, "master"]).await?;
+    let default_branch = detect_default_branch(repo_dir);
+    run_git(repo_dir, &["branch", &branch, &default_branch]).await?;
     Ok(branch)
 }
 
@@ -97,6 +98,22 @@ pub async fn rebase_impl_branch(worktree_path: &Path, target_branch: &str) -> Re
     }
 
     Ok(())
+}
+
+/// リポジトリのデフォルトブランチ名を検出する。失敗時は"master"にフォールバック。
+pub fn detect_default_branch(repo_dir: &Path) -> String {
+    let output = std::process::Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "origin/HEAD"])
+        .current_dir(repo_dir)
+        .output();
+
+    match output {
+        Ok(o) if o.status.success() => {
+            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            s.strip_prefix("origin/").unwrap_or(&s).to_string()
+        }
+        _ => "master".to_string(),
+    }
 }
 
 pub async fn run_git(repo_dir: &Path, args: &[&str]) -> Result<()> {

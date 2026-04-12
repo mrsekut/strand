@@ -11,6 +11,7 @@ use std::time::Instant;
 
 use anyhow::Result;
 
+use crate::ai::implement::worktree::detect_default_branch;
 use crate::bd::{self, Issue};
 use crate::widget::keybar::KeyBar;
 
@@ -28,11 +29,13 @@ pub struct Core {
     pub keybar: KeyBar,
     pub filter: Filter,
     pub notification: Option<(String, Instant)>,
+    pub default_branch: String,
 }
 
 impl Core {
     pub fn new() -> Self {
         Self {
+            default_branch: detect_default_branch(&Self::repo_dir()),
             issue_store: IssueStore::new(),
             view: View::IssueList,
             view_stack: Vec::new(),

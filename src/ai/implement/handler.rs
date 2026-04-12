@@ -51,7 +51,7 @@ impl WorkflowHandler for ImplHandler {
         let base_branch = if let Some(eid) = &config.epic_id {
             worktree::ensure_epic_branch(&repo_dir, eid).await?
         } else {
-            "master".to_string()
+            worktree::detect_default_branch(&repo_dir)
         };
 
         let (wt_path, _branch) =

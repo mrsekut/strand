@@ -117,7 +117,7 @@ impl ImplManager {
 
         let target = match epic_id {
             Some(eid) => super::epic_branch_name(eid),
-            None => "master".to_string(),
+            None => worktree::detect_default_branch(repo_dir),
         };
         super::merge::merge_into_branch(repo_dir, &job.branch, &target).await?;
 
@@ -203,7 +203,7 @@ impl ImplManager {
         }
     }
 
-    /// epicブランチをmasterにmerge
+    /// epicブランチをデフォルトブランチにmerge
     pub async fn merge_epic(
         &mut self,
         epic_id: &str,
@@ -215,7 +215,7 @@ impl ImplManager {
             anyhow::bail!("no_epic_branch");
         }
 
-        super::merge::merge_epic_to_master(repo_dir, epic_id).await?;
+        super::merge::merge_epic_to_default(repo_dir, epic_id).await?;
         let _ = bd::close_issue(dir, epic_id).await;
         Ok(())
     }

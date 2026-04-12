@@ -52,21 +52,22 @@ async fn merge_via_worktree(
 }
 
 /// source_branchをtarget_branchにmergeする
-/// masterへは直接merge、それ以外は一時worktree経由
+/// デフォルトブランチへは直接merge、それ以外は一時worktree経由
 pub async fn merge_into_branch(
     repo_dir: &Path,
     source_branch: &str,
     target_branch: &str,
 ) -> Result<()> {
-    if target_branch == "master" {
+    let default_branch = super::worktree::detect_default_branch(repo_dir);
+    if target_branch == default_branch {
         merge_direct(repo_dir, source_branch).await
     } else {
         merge_via_worktree(repo_dir, source_branch, target_branch).await
     }
 }
 
-/// epicブランチをmasterにmerge後、epicブランチを削除
-pub async fn merge_epic_to_master(repo_dir: &Path, epic_id: &str) -> Result<()> {
+/// epicブランチをデフォルトブランチにmerge後、epicブランチを削除
+pub async fn merge_epic_to_default(repo_dir: &Path, epic_id: &str) -> Result<()> {
     let branch = epic_branch_name(epic_id);
 
     if !epic_branch_exists(repo_dir, epic_id).await {
