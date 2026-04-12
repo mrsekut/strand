@@ -73,6 +73,13 @@ pub fn parse_result(json_str: &str) -> Result<EnrichResult> {
     Ok(result)
 }
 
+/// ResultData.result（ラッパーなしの生テキスト）からパース
+pub fn parse_result_from_text(text: &str) -> Result<EnrichResult> {
+    let inner = extract_json(text)?;
+    let result: EnrichResult = serde_json::from_str(inner)?;
+    Ok(result)
+}
+
 fn extract_json(s: &str) -> Result<&str> {
     let trimmed = s.trim();
 

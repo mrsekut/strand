@@ -1,5 +1,6 @@
+pub mod handler;
 mod manager;
-mod prompt;
+pub mod prompt;
 mod run;
 
 pub use manager::{EnrichManager, EnrichOutcome};

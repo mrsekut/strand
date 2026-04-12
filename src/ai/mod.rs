@@ -30,7 +30,9 @@ impl AiManagers {
         }
     }
 
-    pub async fn restore_impl_jobs(&mut self, repo_dir: &Path, issue_ids: &[String]) {
+    pub async fn restore_jobs(&mut self, repo_dir: &Path, issue_ids: &[String]) {
         self.impl_.restore_jobs(repo_dir, issue_ids).await;
+        self.enrich.restore_jobs().await;
+        self.split.restore_jobs().await;
     }
 }

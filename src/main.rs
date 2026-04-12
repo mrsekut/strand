@@ -56,7 +56,7 @@ async fn main() -> Result<()> {
         .iter()
         .map(|i| i.id.clone())
         .collect();
-    app.ai.restore_impl_jobs(&repo_dir, &issue_ids).await;
+    app.ai.restore_jobs(&repo_dir, &issue_ids).await;
     action::ai::auto_enrich(&app.core, &mut app.ai);
 
     enable_raw_mode()?;

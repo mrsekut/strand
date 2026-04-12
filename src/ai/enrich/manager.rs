@@ -1,11 +1,13 @@
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use tokio::sync::mpsc;
 
+use crate::ai::job;
 use crate::bd::Issue;
 
-use super::EnrichRequest;
-use super::run::{self, EnrichEvent};
+use super::handler::EnrichHandler;
+use super::run::EnrichEvent;
 
 /// handle_eventの結果。app側が必要なアクションを判断するために使う。
 pub enum EnrichOutcome {
@@ -15,6 +17,7 @@ pub enum EnrichOutcome {
 }
 
 pub struct EnrichManager {
+    handler: Arc<EnrichHandler>,
     enriching_ids: HashSet<String>,
     tx: mpsc::Sender<EnrichEvent>,
 }
@@ -22,6 +25,7 @@ pub struct EnrichManager {
 impl EnrichManager {
     pub fn new(tx: mpsc::Sender<EnrichEvent>) -> Self {
         Self {
+            handler: Arc::new(EnrichHandler),
             enriching_ids: HashSet::new(),
             tx,
         }
@@ -31,23 +35,27 @@ impl EnrichManager {
         self.enriching_ids.contains(issue_id)
     }
 
-    /// 手動enrich: issueを受け取って実行
-    pub fn start(&mut self, issue: &Issue, dir: Option<String>) {
+    /// 手動enrich: issueを受け取って実行（デタッチ方式）
+    pub fn start(&mut self, issue: &Issue, _dir: Option<String>) {
         if self.enriching_ids.contains(&issue.id) {
             return;
         }
 
         self.enriching_ids.insert(issue.id.clone());
 
-        let request = EnrichRequest {
-            issue_id: issue.id.clone(),
-            title: issue.title.clone(),
-            description: issue.description.clone(),
-        };
+        let handler = Arc::clone(&self.handler);
+        let issue = issue.clone();
         let tx = self.tx.clone();
 
         tokio::spawn(async move {
-            let _ = run::run(request, dir, tx).await;
+            if let Err(e) = job::start_job(&handler, &issue, &(), &tx).await {
+                let _ = tx
+                    .send(EnrichEvent::Failed {
+                        issue_id: issue.id,
+                        error: e.to_string(),
+                    })
+                    .await;
+            }
         });
     }
 
@@ -67,16 +75,36 @@ impl EnrichManager {
         }
     }
 
-    /// イベント処理。EnrichOutcomeでapp側に何が起きたか伝える。
+    /// 再起動時にジョブを復元
+    pub async fn restore_jobs(&mut self) {
+        let active_jobs = job::restore_jobs(&self.handler, &self.tx).await;
+        for aj in &active_jobs {
+            self.enriching_ids.insert(aj.meta.issue_id.clone());
+        }
+    }
+
+    /// イベント処理
     pub fn handle_event(&mut self, event: EnrichEvent) -> EnrichOutcome {
         match event {
             EnrichEvent::Started { issue_id } => EnrichOutcome::Started { issue_id },
             EnrichEvent::Completed { issue_id } => {
                 self.enriching_ids.remove(&issue_id);
+                // on_completed で既に description + label 更新済み
+                // job ディレクトリ削除
+                if let Ok(jobs_dir) = job::ensure_strand_dir() {
+                    let short_id = crate::bd::short_id(&issue_id);
+                    let job_dir = job::job_dir_path(&jobs_dir, "enrich", short_id);
+                    job::cleanup_job(&job_dir);
+                }
                 EnrichOutcome::Completed { issue_id }
             }
             EnrichEvent::Failed { issue_id, error } => {
                 self.enriching_ids.remove(&issue_id);
+                if let Ok(jobs_dir) = job::ensure_strand_dir() {
+                    let short_id = crate::bd::short_id(&issue_id);
+                    let job_dir = job::job_dir_path(&jobs_dir, "enrich", short_id);
+                    job::cleanup_job(&job_dir);
+                }
                 EnrichOutcome::Failed { issue_id, error }
             }
         }
@@ -128,7 +156,6 @@ mod tests {
         manager.auto_enrich(&issues, None);
         assert!(manager.is_enriching("a"));
 
-        // 2回目は重複しない（panicしない）
         manager.auto_enrich(&issues, None);
         assert!(manager.is_enriching("a"));
     }
@@ -142,7 +169,6 @@ mod tests {
         manager.start(&issue, None);
         assert!(manager.is_enriching("a"));
 
-        // 2回目は何も起きない
         manager.start(&issue, None);
         assert!(manager.is_enriching("a"));
     }
