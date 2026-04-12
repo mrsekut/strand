@@ -3,8 +3,6 @@ pub mod implement;
 pub mod job;
 pub mod split;
 
-use std::path::Path;
-
 use tokio::sync::mpsc;
 
 use crate::ai::enrich::EnrichManager;
@@ -30,8 +28,8 @@ impl AiManagers {
         }
     }
 
-    pub async fn restore_jobs(&mut self, repo_dir: &Path, issue_ids: &[String]) {
-        self.impl_.restore_jobs(repo_dir, issue_ids).await;
+    pub async fn restore_jobs(&mut self) {
+        self.impl_.restore_jobs().await;
         self.enrich.restore_jobs().await;
         self.split.restore_jobs().await;
     }

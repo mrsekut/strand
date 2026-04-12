@@ -48,15 +48,7 @@ async fn main() -> Result<()> {
 
     let mut app = App::new();
     app.core.load_issues().await?;
-    let repo_dir = core::Core::repo_dir();
-    let issue_ids: Vec<String> = app
-        .core
-        .issue_store
-        .issues
-        .iter()
-        .map(|i| i.id.clone())
-        .collect();
-    app.ai.restore_jobs(&repo_dir, &issue_ids).await;
+    app.ai.restore_jobs().await;
     action::ai::auto_enrich(&app.core, &mut app.ai);
 
     enable_raw_mode()?;

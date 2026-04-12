@@ -39,9 +39,8 @@ impl ImplManager {
         self.jobs.get(issue_id)
     }
 
-    /// 既存の .strand/jobs/ + worktree からジョブを復元
-    pub async fn restore_jobs(&mut self, repo_dir: &Path, issue_ids: &[String]) {
-        // 新方式: .strand/jobs/ からの復元
+    /// .strand/jobs/ からジョブを復元
+    pub async fn restore_jobs(&mut self) {
         let active_jobs = job::restore_jobs(&self.handler, &self.tx).await;
         for aj in &active_jobs {
             let branch = branch_name(&aj.issue_id);
@@ -49,7 +48,7 @@ impl ImplManager {
                 .worktree_path
                 .as_ref()
                 .map(std::path::PathBuf::from)
-                .unwrap_or_else(|| worktree::worktree_path(repo_dir, &aj.issue_id));
+                .unwrap_or_default();
 
             self.jobs.entry(aj.issue_id.clone()).or_insert(ImplJob {
                 issue_id: aj.issue_id.clone(),
@@ -59,12 +58,6 @@ impl ImplManager {
                 completed_at: None,
                 session_id: None,
             });
-        }
-
-        // 旧方式: worktree からの復元（互換性）
-        let discovered = worktree::discover_worktrees(repo_dir, issue_ids).await;
-        for job in discovered {
-            self.jobs.entry(job.issue_id.clone()).or_insert(job);
         }
     }
 
