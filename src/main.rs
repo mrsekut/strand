@@ -3,6 +3,7 @@ mod ai;
 mod app;
 mod bd;
 mod clipboard;
+mod config;
 mod core;
 mod editor;
 mod page;
@@ -106,9 +107,11 @@ COMMANDS:
 OPTIONS:
     -h, --help      Show this help
 
-ENVIRONMENT VARIABLES:
-    STRAND_ENRICH_SKILL    Agent skill name to use for enrich (default: built-in problem/solution analysis)
-                           Example: STRAND_ENRICH_SKILL=my-analysis-skill strand"
+CONFIG:
+    ~/.config/strand/config.toml
+
+    [enrich]
+    skill = \"my-analysis-skill\"  # Agent skill name for enrich (default: built-in)"
     );
 }
 

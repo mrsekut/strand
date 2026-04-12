@@ -8,6 +8,7 @@ use tokio::sync::mpsc;
 use crate::ai::enrich::EnrichManager;
 use crate::ai::implement::ImplManager;
 use crate::ai::split::SplitManager;
+use crate::config::Config;
 
 pub struct AiManagers {
     pub enrich: EnrichManager,
@@ -20,9 +21,10 @@ impl AiManagers {
         enrich_tx: mpsc::Sender<enrich::EnrichEvent>,
         impl_tx: mpsc::Sender<implement::ImplEvent>,
         split_tx: mpsc::Sender<split::SplitEvent>,
+        config: &Config,
     ) -> Self {
         Self {
-            enrich: EnrichManager::new(enrich_tx),
+            enrich: EnrichManager::new(enrich_tx, config.enrich.clone()),
             impl_: ImplManager::new(impl_tx),
             split: SplitManager::new(split_tx),
         }

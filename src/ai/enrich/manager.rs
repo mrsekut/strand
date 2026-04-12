@@ -5,6 +5,7 @@ use tokio::sync::mpsc;
 
 use crate::ai::job;
 use crate::bd::Issue;
+use crate::config::EnrichConfig;
 
 use super::handler::EnrichHandler;
 use super::run::EnrichEvent;
@@ -20,14 +21,16 @@ pub struct EnrichManager {
     handler: Arc<EnrichHandler>,
     enriching_ids: HashSet<String>,
     tx: mpsc::Sender<EnrichEvent>,
+    config: EnrichConfig,
 }
 
 impl EnrichManager {
-    pub fn new(tx: mpsc::Sender<EnrichEvent>) -> Self {
+    pub fn new(tx: mpsc::Sender<EnrichEvent>, config: EnrichConfig) -> Self {
         Self {
             handler: Arc::new(EnrichHandler),
             enriching_ids: HashSet::new(),
             tx,
+            config,
         }
     }
 
@@ -46,9 +49,12 @@ impl EnrichManager {
         let handler = Arc::clone(&self.handler);
         let issue = issue.clone();
         let tx = self.tx.clone();
+        let config = EnrichConfig {
+            skill: self.config.skill.clone(),
+        };
 
         tokio::spawn(async move {
-            if let Err(e) = job::start_job(&handler, &issue, &(), &tx).await {
+            if let Err(e) = job::start_job(&handler, &issue, &config, &tx).await {
                 let _ = tx
                     .send(EnrichEvent::Failed {
                         issue_id: issue.id,
@@ -131,7 +137,7 @@ mod tests {
     #[tokio::test]
     async fn auto_enrich_filters_by_label() {
         let (tx, _rx) = mpsc::channel(32);
-        let mut manager = EnrichManager::new(tx);
+        let mut manager = EnrichManager::new(tx, EnrichConfig::default());
 
         let issues = vec![
             make_issue("a", vec!["strand-needs-enrich"]),
@@ -149,7 +155,7 @@ mod tests {
     #[tokio::test]
     async fn auto_enrich_skips_already_enriching() {
         let (tx, _rx) = mpsc::channel(32);
-        let mut manager = EnrichManager::new(tx);
+        let mut manager = EnrichManager::new(tx, EnrichConfig::default());
 
         let issues = vec![make_issue("a", vec!["strand-needs-enrich"])];
 
@@ -163,7 +169,7 @@ mod tests {
     #[tokio::test]
     async fn start_skips_duplicate() {
         let (tx, _rx) = mpsc::channel(32);
-        let mut manager = EnrichManager::new(tx);
+        let mut manager = EnrichManager::new(tx, EnrichConfig::default());
 
         let issue = make_issue("a", vec![]);
         manager.start(&issue, None);
@@ -176,7 +182,7 @@ mod tests {
     #[test]
     fn handle_completed_removes_from_enriching() {
         let (tx, _rx) = mpsc::channel(32);
-        let mut manager = EnrichManager::new(tx);
+        let mut manager = EnrichManager::new(tx, EnrichConfig::default());
 
         manager.enriching_ids.insert("a".to_string());
         assert!(manager.is_enriching("a"));
@@ -191,7 +197,7 @@ mod tests {
     #[test]
     fn handle_failed_removes_from_enriching() {
         let (tx, _rx) = mpsc::channel(32);
-        let mut manager = EnrichManager::new(tx);
+        let mut manager = EnrichManager::new(tx, EnrichConfig::default());
 
         manager.enriching_ids.insert("a".to_string());
 

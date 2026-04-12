@@ -4,6 +4,7 @@ use crate::ai::AiManagers;
 use crate::ai::enrich;
 use crate::ai::implement;
 use crate::ai::split;
+use crate::config::Config;
 use crate::core::Core;
 
 pub struct App {
@@ -16,12 +17,13 @@ pub struct App {
 
 impl App {
     pub fn new() -> Self {
+        let config = Config::load();
         let (enrich_tx, enrich_rx) = mpsc::channel(32);
         let (impl_tx, impl_rx) = mpsc::channel(32);
         let (split_tx, split_rx) = mpsc::channel(32);
         Self {
             core: Core::new(),
-            ai: AiManagers::new(enrich_tx, impl_tx, split_tx),
+            ai: AiManagers::new(enrich_tx, impl_tx, split_tx, &config),
             enrich_rx,
             impl_rx,
             split_rx,

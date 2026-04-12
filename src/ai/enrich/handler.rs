@@ -4,6 +4,7 @@ use anyhow::Result;
 
 use crate::ai::job::{JobMeta, ResultData, SetupContext, WorkflowHandler};
 use crate::bd::{self, Issue};
+use crate::config::EnrichConfig;
 use crate::core::Core;
 
 use super::prompt;
@@ -13,15 +14,15 @@ pub struct EnrichHandler;
 
 impl WorkflowHandler for EnrichHandler {
     type Event = EnrichEvent;
-    type Config = ();
+    type Config = EnrichConfig;
 
     fn workflow_name(&self) -> &str {
         "enrich"
     }
 
-    fn build_command(&self, issue: &Issue, _config: &()) -> Vec<String> {
-        let prompt_text = match std::env::var("STRAND_ENRICH_SKILL").ok() {
-            Some(skill_name) => build_skill_prompt(issue, &skill_name),
+    fn build_command(&self, issue: &Issue, config: &EnrichConfig) -> Vec<String> {
+        let prompt_text = match &config.skill {
+            Some(skill_name) => build_skill_prompt(issue, skill_name),
             None => prompt::build_prompt(&super::EnrichRequest {
                 title: issue.title.clone(),
                 description: issue.description.clone(),
@@ -42,7 +43,7 @@ impl WorkflowHandler for EnrichHandler {
         Core::repo_dir()
     }
 
-    async fn setup(&self, _issue: &Issue, _config: &()) -> Result<SetupContext> {
+    async fn setup(&self, _issue: &Issue, _config: &EnrichConfig) -> Result<SetupContext> {
         Ok(SetupContext {
             worktree_path: None,
         })
@@ -58,7 +59,8 @@ impl WorkflowHandler for EnrichHandler {
         let issue_id = &meta.issue_id;
 
         // 結果を解釈して description を更新
-        let update_result = if std::env::var("STRAND_ENRICH_SKILL").is_ok() {
+        let config = crate::config::Config::load();
+        let update_result = if config.enrich.skill.is_some() {
             // skill モード: result をそのまま追記
             update_description_with_text(issue_id, &result.result).await
         } else {
