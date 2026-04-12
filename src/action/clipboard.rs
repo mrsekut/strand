@@ -27,17 +27,17 @@ pub fn copy_log_command(core: &mut Core, ai: &AiManagers, issue_id: &str) {
         core.notify("No impl job found");
         return;
     };
-    let log_cmd = if let Ok(jobs_dir) = job::ensure_strand_dir() {
-        let short_id = crate::bd::short_id(issue_id);
-        let job_dir = job::job_dir_path(&jobs_dir, "impl", short_id);
-        let log_path = job_dir.join("output.jsonl");
-        format!("tail -f {} | jq .", log_path.display())
-    } else {
-        // fallback to legacy path
-        let log_path = job.worktree_path.join(".strand-impl.jsonl");
-        format!("tail -f {} | jq .", log_path.display())
+    let jobs_dir = match job::ensure_strand_dir() {
+        Ok(d) => d,
+        Err(_) => {
+            core.notify("Failed to access .strand/jobs/");
+            return;
+        }
     };
-    let cmd = log_cmd;
+    let short_id = crate::bd::short_id(issue_id);
+    let job_dir = job::job_dir_path(&jobs_dir, "impl", short_id);
+    let log_path = job_dir.join("output.jsonl");
+    let cmd = format!("tail -f {} | jq .", log_path.display());
     match crate::clipboard::copy(&cmd) {
         Ok(_) => core.notify(format!("Copied: {cmd}")),
         Err(e) => core.notify(format!("Copy failed: {e}")),
