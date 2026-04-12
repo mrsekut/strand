@@ -60,6 +60,9 @@ pub enum AppAction {
     QuickCreate,
     EditDescription(String),
 
+    // ── Session ──
+    StartSession(String),
+
     // ── Clipboard ──
     CopyId(String),
     CopyResumeCommand(String),
@@ -161,6 +164,9 @@ pub async fn process_action(
         // ── Editor ──
         AppAction::QuickCreate => editor::quick_create_with_editor(core, ai, terminal).await,
         AppAction::EditDescription(id) => editor::edit_description(core, terminal, &id).await,
+
+        // ── Session ──
+        AppAction::StartSession(id) => clipboard::start_session(core, &id).await,
 
         // ── Clipboard ──
         AppAction::CopyId(id) => match crate::clipboard::copy(&id) {

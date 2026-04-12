@@ -165,6 +165,7 @@ pub fn key_hints(core: &Core, impl_manager: &ImplManager) -> Line<'static> {
         ("e", "edit"),
         ("a", "ai"),
         ("s", "status"),
+        ("x", "session"),
     ];
     if let Some(issue_id) = core.current_issue_id() {
         if let Some(job) = impl_manager.get_job(&issue_id) {

@@ -35,6 +35,10 @@ pub fn handle_key(key: KeyCode, core: &Core) -> Vec<AppAction> {
             Some(id) => vec![AppAction::CopyResumeCommand(id)],
             None => vec![],
         },
+        KeyCode::Char('x') => match core.current_issue_id() {
+            Some(id) => vec![AppAction::StartSession(id)],
+            None => vec![],
+        },
         KeyCode::Char('q') => vec![AppAction::QuickCreate],
         KeyCode::Char('j') => vec![AppAction::NavigateIssue { forward: true }],
         KeyCode::Char('k') => vec![AppAction::NavigateIssue { forward: false }],
