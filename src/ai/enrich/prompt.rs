@@ -50,6 +50,7 @@ Respond in JSON format exactly matching this structure:
 Important:
 - Keep each bullet/sentence short and scannable (aim for under 80 chars)
 - Output only valid JSON, no markdown fences or extra text
+- You MUST respond in English
 - Write in the same language as the issue title"#,
         title = request.title,
     )

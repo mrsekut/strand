@@ -113,7 +113,9 @@ fn build_prompt(issue: &Issue) -> String {
     }
 
     parts.push(
-        r#"Implement the issue above. Create or edit files as needed and leave the code in a working state.
+        r#"You MUST respond in English.
+
+Implement the issue above. Create or edit files as needed and leave the code in a working state.
 
 ## Commit rules
 When done, commit your changes. The commit message body must record the background and reasoning behind the implementation.

@@ -4,7 +4,9 @@
 
 An AI-powered TUI frontend for [beads](https://github.com/steveyegge/beads). Throw in rough issue descriptions — AI analyzes, splits into subtasks, implements each one in isolated git worktrees, and you just review & merge.
 
-<!-- TODO: demo GIF here -->
+<p align="center">
+  <img src="assets/demo.gif" alt="strand demo" width="800" />
+</p>
 
 ## How it works
 
