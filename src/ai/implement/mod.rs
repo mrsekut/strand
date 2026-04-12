@@ -27,15 +27,6 @@ pub struct ImplJob {
     pub session_id: Option<String>,
 }
 
-pub struct ImplRequest {
-    pub issue_id: String,
-    pub title: String,
-    pub description: Option<String>,
-    pub design: Option<String>,
-    pub repo_dir: PathBuf,
-    pub base_branch: String,
-}
-
 pub fn branch_name(issue_id: &str) -> String {
     format!("impl/{issue_id}")
 }
