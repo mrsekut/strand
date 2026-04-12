@@ -32,10 +32,6 @@ pub fn handle_key(key: KeyCode, core: &Core) -> Vec<AppAction> {
             Some(def) => vec![AppAction::OpenSelector(def)],
             None => vec![],
         },
-        KeyCode::Char('p') => match core.current_issue_id() {
-            Some(id) => vec![AppAction::CopyWorktreePath(id)],
-            None => vec![],
-        },
         KeyCode::Char('c') => match core.current_issue_id() {
             Some(id) => vec![AppAction::CopyResumeCommand(id)],
             None => vec![],

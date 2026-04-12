@@ -66,7 +66,6 @@ pub enum AppAction {
     // ── Clipboard ──
     CopyId(String),
     CopyResumeCommand(String),
-    CopyWorktreePath(String),
 
     // ── Filter ──
     ClearFilter,
@@ -174,7 +173,6 @@ pub async fn process_action(
             Err(e) => core.notify(format!("Copy failed: {e}")),
         },
         AppAction::CopyResumeCommand(id) => clipboard::copy_resume_command(core, ai, &id),
-        AppAction::CopyWorktreePath(id) => clipboard::copy_worktree_path(core, ai, &id),
 
         // ── Filter ──
         AppAction::ClearFilter => {

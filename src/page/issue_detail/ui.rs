@@ -128,7 +128,6 @@ pub fn draw(frame: &mut Frame, core: &Core, impl_manager: &ImplManager, area: Re
             }
             _ => {}
         }
-        impl_keys.push(("p", "path"));
         if job.session_id.is_some() {
             impl_keys.push(("c", "continue"));
         }

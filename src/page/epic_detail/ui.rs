@@ -169,7 +169,6 @@ pub fn key_hints(core: &Core, impl_manager: &ImplManager) -> Line<'static> {
     ];
     if let Some(issue_id) = core.current_issue_id() {
         if let Some(job) = impl_manager.get_job(&issue_id) {
-            keys.push(("p", "path"));
             if job.session_id.is_some() {
                 keys.push(("c", "continue"));
             }
