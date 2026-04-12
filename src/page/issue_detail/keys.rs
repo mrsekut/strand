@@ -19,7 +19,6 @@ pub fn handle_key(key: KeyCode, core: &Core) -> Vec<AppAction> {
         },
         KeyCode::Char('m') => vec![AppAction::OpenConfirm(ConfirmAction::Merge)],
         KeyCode::Char('d') => vec![AppAction::OpenConfirm(ConfirmAction::Discard)],
-        KeyCode::Char('r') => vec![AppAction::OpenConfirm(ConfirmAction::Retry)],
         KeyCode::Char('a') => match build_ai_selector(core) {
             Some(def) => vec![AppAction::OpenSelector(def)],
             None => vec![],

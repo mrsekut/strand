@@ -70,10 +70,6 @@ impl ImplManager {
         _repo_dir: &Path,
         _dir: Option<String>,
     ) -> Result<()> {
-        if self.jobs.contains_key(&issue.id) {
-            return Ok(());
-        }
-
         let config = ImplConfig {
             epic_id: epic_id.map(|s| s.to_string()),
         };

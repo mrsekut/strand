@@ -44,7 +44,6 @@ pub enum AppAction {
     // ── Impl operations ──
     MergeImpl(String),
     DiscardImpl(String),
-    RetryImpl(String),
     MergeEpic(String),
 
     // ── State changes ──
@@ -133,7 +132,6 @@ pub async fn process_action(
                 }
                 ConfirmAction::Discard => impl_ops::discard_impl(core, ai, &issue_id).await,
                 ConfirmAction::MergeEpic => impl_ops::merge_epic(core, ai, &issue_id).await,
-                ConfirmAction::Retry => impl_ops::retry_impl(core, ai, &issue_id).await,
             }
         }
 
@@ -147,7 +145,6 @@ pub async fn process_action(
         // ── Impl operations ──
         AppAction::MergeImpl(id) => impl_ops::merge_impl(core, ai, &id).await,
         AppAction::DiscardImpl(id) => impl_ops::discard_impl(core, ai, &id).await,
-        AppAction::RetryImpl(id) => impl_ops::retry_impl(core, ai, &id).await,
         AppAction::MergeEpic(id) => impl_ops::merge_epic(core, ai, &id).await,
 
         // ── State changes ──

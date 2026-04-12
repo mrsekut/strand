@@ -28,17 +28,6 @@ pub async fn discard_impl(core: &mut Core, ai: &mut AiManagers, issue_id: &str) 
     core.notify(format!("Discarded: {issue_id}"));
 }
 
-pub async fn retry_impl(core: &mut Core, ai: &mut AiManagers, issue_id: &str) {
-    let repo_dir = Core::repo_dir();
-    if let Err(e) = ai.impl_.discard(issue_id, &repo_dir).await {
-        core.notify(format!("Retry failed (discard): {e}"));
-        return;
-    }
-
-    let epic_id = core.find_parent_epic_id();
-    crate::action::ai::start_implement(core, ai, issue_id, epic_id.as_deref()).await;
-}
-
 pub async fn merge_epic(core: &mut Core, ai: &mut AiManagers, epic_id: &str) {
     if let View::EpicDetail { children, .. } = &core.view {
         let unclosed: Vec<String> = children

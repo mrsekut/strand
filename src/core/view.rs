@@ -7,7 +7,6 @@ pub enum ConfirmAction {
     Merge,
     Discard,
     MergeEpic,
-    Retry,
 }
 
 impl ConfirmAction {
@@ -16,7 +15,6 @@ impl ConfirmAction {
             ConfirmAction::Merge => "confirm merge",
             ConfirmAction::Discard => "confirm discard",
             ConfirmAction::MergeEpic => "confirm merge epic to master",
-            ConfirmAction::Retry => "confirm retry",
         }
     }
 
@@ -25,7 +23,6 @@ impl ConfirmAction {
             ConfirmAction::Merge => "Merge? (y/n)",
             ConfirmAction::Discard => "Discard? (y/n)",
             ConfirmAction::MergeEpic => "Merge epic to master? (y/n)",
-            ConfirmAction::Retry => "Retry? (y/n)",
         }
     }
 }

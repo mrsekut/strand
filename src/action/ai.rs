@@ -88,6 +88,14 @@ pub async fn start_implement(
     };
 
     let repo_dir = Core::repo_dir();
+
+    if ai.impl_.get_job(issue_id).is_some() {
+        if let Err(e) = ai.impl_.discard(issue_id, &repo_dir).await {
+            core.notify(format!("Failed to discard previous impl: {e}"));
+            return;
+        }
+    }
+
     if let Err(e) = ai.impl_.start(&issue, epic_id, &repo_dir, None).await {
         core.notify(format!("Failed to start impl: {e}"));
     }
