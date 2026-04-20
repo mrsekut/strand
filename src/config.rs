@@ -13,14 +13,13 @@ pub struct EnrichConfig {
 
 impl Config {
     pub fn load() -> Self {
-        let path = dirs::config_dir().map(|d| d.join("strand/config.toml"));
+        let path = crate::core::Core::repo_dir().join(".strand/config.toml");
 
-        match path {
-            Some(p) if p.exists() => {
-                let content = std::fs::read_to_string(&p).unwrap_or_default();
-                toml::from_str(&content).unwrap_or_default()
-            }
-            _ => Config::default(),
+        if path.exists() {
+            let content = std::fs::read_to_string(&path).unwrap_or_default();
+            toml::from_str(&content).unwrap_or_default()
+        } else {
+            Config::default()
         }
     }
 }

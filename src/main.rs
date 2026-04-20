@@ -108,7 +108,7 @@ OPTIONS:
     -h, --help      Show this help
 
 CONFIG:
-    ~/.config/strand/config.toml
+    .strand/config.toml
 
     [enrich]
     skill = \"my-analysis-skill\"  # Agent skill name for enrich (default: built-in)"
