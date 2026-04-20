@@ -58,6 +58,15 @@ impl WorkflowHandler for EnrichHandler {
     async fn on_completed(&self, result: ResultData, meta: &JobMeta) -> EnrichEvent {
         let issue_id = &meta.issue_id;
 
+        // 既に enrich 済みなら description 更新をスキップ（再起動時の重複追記を防止）
+        if let Ok(issue) = bd::get_issue(None, issue_id).await {
+            if issue.labels.contains(&"strand-enriched".to_string()) {
+                return EnrichEvent::Completed {
+                    issue_id: issue_id.clone(),
+                };
+            }
+        }
+
         // 結果を解釈して description を更新
         let config = crate::config::Config::load();
         let update_result = if config.enrich.skill.is_some() {
