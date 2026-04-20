@@ -28,12 +28,19 @@ pub fn draw(frame: &mut Frame, core: &Core, ai: &AiManagers, area: Rect) {
     // Table (with filter applied)
     let displayed = core.issue_store.displayed_issues(&core.filter);
 
+    let estimate_width = displayed
+        .iter()
+        .filter_map(|issue| issue.estimate)
+        .map(|e| e.to_string().len() as u16)
+        .max()
+        .unwrap_or(0);
+
     let rows: Vec<Row> = displayed
         .iter()
         .map(|issue| {
             let (icon, icon_style) = epic_icon(ai, issue);
             let priority_text = issue.priority.map(|p| format!("P{p}")).unwrap_or_default();
-            let estimate_text = issue.estimate.clone().unwrap_or_default();
+            let estimate_text = issue.estimate.map(|e| e.to_string()).unwrap_or_default();
             Row::new(vec![
                 Cell::from(icon).style(icon_style),
                 Cell::from(bd::short_id(&issue.id).to_string())
@@ -49,7 +56,7 @@ pub fn draw(frame: &mut Frame, core: &Core, ai: &AiManagers, area: Rect) {
         Constraint::Length(2),
         Constraint::Length(4),
         Constraint::Length(3),
-        Constraint::Length(4),
+        Constraint::Length(estimate_width),
         Constraint::Min(10),
     ];
 
