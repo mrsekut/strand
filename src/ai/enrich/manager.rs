@@ -96,21 +96,12 @@ impl EnrichManager {
             EnrichEvent::Completed { issue_id } => {
                 self.enriching_ids.remove(&issue_id);
                 // on_completed で既に description + label 更新済み
-                // job ディレクトリ削除
-                if let Ok(jobs_dir) = job::ensure_strand_dir() {
-                    let short_id = crate::bd::short_id(&issue_id);
-                    let job_dir = job::job_dir_path(&jobs_dir, "enrich", short_id);
-                    job::cleanup_job(&job_dir);
-                }
+                // job ディレクトリは調査用に残す (output.jsonl, stderr.log)
                 EnrichOutcome::Completed { issue_id }
             }
             EnrichEvent::Failed { issue_id, error } => {
                 self.enriching_ids.remove(&issue_id);
-                if let Ok(jobs_dir) = job::ensure_strand_dir() {
-                    let short_id = crate::bd::short_id(&issue_id);
-                    let job_dir = job::job_dir_path(&jobs_dir, "enrich", short_id);
-                    job::cleanup_job(&job_dir);
-                }
+                // job ディレクトリは調査用に残す (output.jsonl, stderr.log)
                 EnrichOutcome::Failed { issue_id, error }
             }
         }
