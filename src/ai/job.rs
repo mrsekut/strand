@@ -16,6 +16,7 @@ use crate::core::Core;
 // --- Types ---
 
 /// output.jsonl のパース結果
+#[derive(Clone)]
 pub struct ResultData {
     pub result: String,
     pub session_id: Option<String>,
@@ -388,6 +389,7 @@ pub async fn restore_jobs<W: WorkflowHandler>(
         } else {
             // 死んでる → 結果を処理
             let output_path = path.join("output.jsonl");
+            let completed = parse_output(&output_path).is_some();
             let event = if let Some(result) = parse_output(&output_path) {
                 handler.on_completed(result, &meta).await
             } else {
@@ -395,8 +397,10 @@ pub async fn restore_jobs<W: WorkflowHandler>(
             };
             let _ = tx.send(event).await;
 
-            // job ディレクトリ削除
-            let _ = fs::remove_dir_all(&path);
+            // 正常完了 → ログを残す、異常終了 → 削除
+            if !completed {
+                let _ = fs::remove_dir_all(&path);
+            }
         }
     }
 
