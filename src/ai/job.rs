@@ -395,6 +395,14 @@ pub async fn restore_jobs<W: WorkflowHandler>(
             } else {
                 handler.on_failed(&meta.issue_id, "process exited without result".to_string())
             };
+
+            // 完了済みジョブもリストに追加してから event を送る。
+            // Manager 側で jobs HashMap に登録された後に Completed/Failed
+            // イベントが処理されるよう、先に push する。
+            if completed {
+                jobs.push(meta);
+            }
+
             let _ = tx.send(event).await;
 
             // 正常完了 → ログを残す、異常終了 → 削除
