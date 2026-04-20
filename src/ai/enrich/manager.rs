@@ -122,6 +122,7 @@ mod tests {
             labels: labels.into_iter().map(String::from).collect(),
             issue_type: None,
             updated_at: None,
+            estimate: None,
         }
     }
 

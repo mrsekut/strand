@@ -18,6 +18,8 @@ pub struct Issue {
     pub issue_type: Option<String>,
     #[serde(default)]
     pub updated_at: Option<String>,
+    #[serde(default)]
+    pub estimate: Option<String>,
 }
 
 pub fn short_id(id: &str) -> &str {

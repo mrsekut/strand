@@ -33,11 +33,13 @@ pub fn draw(frame: &mut Frame, core: &Core, ai: &AiManagers, area: Rect) {
         .map(|issue| {
             let (icon, icon_style) = epic_icon(ai, issue);
             let priority_text = issue.priority.map(|p| format!("P{p}")).unwrap_or_default();
+            let estimate_text = issue.estimate.clone().unwrap_or_default();
             Row::new(vec![
                 Cell::from(icon).style(icon_style),
                 Cell::from(bd::short_id(&issue.id).to_string())
                     .style(Style::default().fg(Color::DarkGray)),
                 Cell::from(priority_text).style(priority_style(issue.priority)),
+                Cell::from(estimate_text).style(Style::default().fg(Color::Cyan)),
                 Cell::from(issue.title.clone()),
             ])
         })
@@ -47,6 +49,7 @@ pub fn draw(frame: &mut Frame, core: &Core, ai: &AiManagers, area: Rect) {
         Constraint::Length(2),
         Constraint::Length(4),
         Constraint::Length(3),
+        Constraint::Length(4),
         Constraint::Min(10),
     ];
 

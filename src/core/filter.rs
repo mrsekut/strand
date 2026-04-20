@@ -89,6 +89,7 @@ mod tests {
             labels: labels.iter().map(|l| l.to_string()).collect(),
             issue_type: None,
             updated_at: None,
+            estimate: None,
         }
     }
 
