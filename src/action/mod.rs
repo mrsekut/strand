@@ -55,6 +55,14 @@ pub enum AppAction {
         issue_id: String,
         priority: u8,
     },
+    SetEstimate {
+        issue_id: String,
+        minutes: u32,
+    },
+    OpenEstimateInput {
+        issue_id: String,
+        current: Option<u32>,
+    },
 
     // ── Editor ──
     QuickCreate,
@@ -88,6 +96,11 @@ pub struct SelectorItem {
     pub shortcut: String,
     pub label: String,
     pub action: AppAction,
+}
+
+#[derive(Debug, Clone)]
+pub enum InputTarget {
+    Estimate { issue_id: String },
 }
 
 /// AppAction を処理する。全操作のディスパッチャ。
@@ -158,6 +171,20 @@ pub async fn process_action(
         }
         AppAction::SetPriority { issue_id, priority } => {
             state::set_priority(core, &issue_id, priority).await;
+        }
+        AppAction::SetEstimate { issue_id, minutes } => {
+            state::set_estimate(core, &issue_id, minutes).await;
+        }
+        AppAction::OpenEstimateInput { issue_id, current } => {
+            let initial = current
+                .filter(|&m| m > 0)
+                .map(|m| m.to_string())
+                .unwrap_or_default();
+            core.keybar = KeyBar::open_numeric_input(
+                "estimate (min)".into(),
+                initial,
+                InputTarget::Estimate { issue_id },
+            );
         }
 
         // ── Editor ──

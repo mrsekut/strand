@@ -163,6 +163,7 @@ pub fn key_hints(core: &Core, impl_manager: &ImplManager) -> Line<'static> {
         ("q", "create"),
         ("y", "copy id"),
         ("e", "edit"),
+        ("E", "estimate"),
         ("a", "ai"),
         ("s", "status"),
         ("w", "session"),

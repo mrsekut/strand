@@ -43,3 +43,19 @@ pub async fn set_priority(core: &mut Core, issue_id: &str, priority: u8) {
         }
     }
 }
+
+pub async fn set_estimate(core: &mut Core, issue_id: &str, minutes: u32) {
+    match bd::update_estimate(None, issue_id, minutes).await {
+        Ok(_) => {
+            if minutes == 0 {
+                core.notify(format!("Estimate cleared: {issue_id}"));
+            } else {
+                core.notify(format!("Estimate set: {issue_id} → {minutes}m"));
+            }
+            let _ = core.load_issues().await;
+        }
+        Err(e) => {
+            core.notify(format!("Estimate update failed: {e}"));
+        }
+    }
+}

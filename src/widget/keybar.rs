@@ -1,7 +1,7 @@
 use crossterm::event::KeyCode;
 use ratatui::{prelude::*, widgets::Paragraph};
 
-use crate::action::{AppAction, SelectorDef, SelectorItem};
+use crate::action::{AppAction, InputTarget, SelectorDef, SelectorItem};
 use crate::core::ConfirmAction;
 
 /// トグルセレクタの種別
@@ -78,6 +78,23 @@ impl ToggleSelector {
     }
 }
 
+/// 数値入力モード。空文字でEnter時はclear扱い。
+pub struct NumericInput {
+    pub label: String,
+    pub buffer: String,
+    pub target: InputTarget,
+}
+
+impl NumericInput {
+    pub fn new(label: String, initial: String, target: InputTarget) -> Self {
+        Self {
+            label,
+            buffer: initial,
+            target,
+        }
+    }
+}
+
 /// 画面最下部の 1 行 Widget。状態・キー処理・描画を自己完結で持つ。
 pub enum KeyBar {
     /// ページデフォルト（ヒントは描画時に page から取得）
@@ -88,11 +105,17 @@ pub enum KeyBar {
     Toggle(ToggleSelector),
     /// 確認モード: y/n
     Confirm(ConfirmAction),
+    /// 数値入力モード
+    NumericInput(NumericInput),
 }
 
 impl KeyBar {
     pub fn open_selector(def: SelectorDef) -> Self {
         KeyBar::Selector(Selector::from_def(def))
+    }
+
+    pub fn open_numeric_input(label: String, initial: String, target: InputTarget) -> Self {
+        KeyBar::NumericInput(NumericInput::new(label, initial, target))
     }
 
     pub fn is_default(&self) -> bool {
@@ -155,6 +178,35 @@ impl KeyBar {
                     _ => vec![AppAction::CloseKeyBar],
                 }
             }
+
+            KeyBar::NumericInput(input) => match key {
+                KeyCode::Esc => vec![AppAction::CloseKeyBar],
+                KeyCode::Backspace => {
+                    input.buffer.pop();
+                    vec![]
+                }
+                KeyCode::Enter => {
+                    let minutes: u32 = if input.buffer.is_empty() {
+                        0
+                    } else {
+                        match input.buffer.parse() {
+                            Ok(n) => n,
+                            Err(_) => return vec![],
+                        }
+                    };
+                    let action = match input.target.clone() {
+                        InputTarget::Estimate { issue_id } => {
+                            AppAction::SetEstimate { issue_id, minutes }
+                        }
+                    };
+                    vec![AppAction::CloseKeyBar, action]
+                }
+                KeyCode::Char(c) if c.is_ascii_digit() => {
+                    input.buffer.push(c);
+                    vec![]
+                }
+                _ => vec![],
+            },
         }
     }
 
@@ -167,6 +219,7 @@ impl KeyBar {
             KeyBar::Confirm(action) => {
                 crate::ui::padded_keybar_line(&[("y", action.label()), ("n", "cancel")])
             }
+            KeyBar::NumericInput(input) => numeric_input_line(input),
         };
         frame.render_widget(Paragraph::new(line), area);
     }
@@ -202,6 +255,24 @@ fn selector_line(items: &[SelectorItem], cursor: usize) -> Line<'static> {
         spans.push(Span::styled(format!(" {}", item.label), desc_style));
     }
     Line::from(spans)
+}
+
+fn numeric_input_line(input: &NumericInput) -> Line<'static> {
+    Line::from(vec![
+        Span::raw(" "),
+        Span::styled(
+            input.label.clone(),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" > "),
+        Span::styled(
+            input.buffer.clone(),
+            Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled("_", Style::default().fg(Color::DarkGray)),
+    ])
 }
 
 fn toggle_line(items: &[(String, bool)], cursor: usize) -> Line<'static> {
@@ -341,6 +412,79 @@ mod tests {
             actions[1],
             AppAction::Confirm(ConfirmAction::Merge)
         ));
+    }
+
+    #[test]
+    fn numeric_input_digits_and_enter() {
+        let mut kb = KeyBar::open_numeric_input(
+            "estimate".into(),
+            String::new(),
+            InputTarget::Estimate {
+                issue_id: "strand-1".into(),
+            },
+        );
+        kb.handle_key(KeyCode::Char('3'));
+        kb.handle_key(KeyCode::Char('0'));
+        let actions = kb.handle_key(KeyCode::Enter);
+        assert_eq!(actions.len(), 2);
+        assert!(matches!(actions[0], AppAction::CloseKeyBar));
+        assert!(matches!(
+            actions[1],
+            AppAction::SetEstimate { ref issue_id, minutes: 30 } if issue_id == "strand-1"
+        ));
+    }
+
+    #[test]
+    fn numeric_input_empty_enter_clears() {
+        let mut kb = KeyBar::open_numeric_input(
+            "estimate".into(),
+            String::new(),
+            InputTarget::Estimate {
+                issue_id: "strand-1".into(),
+            },
+        );
+        let actions = kb.handle_key(KeyCode::Enter);
+        assert_eq!(actions.len(), 2);
+        assert!(matches!(
+            actions[1],
+            AppAction::SetEstimate { minutes: 0, .. }
+        ));
+    }
+
+    #[test]
+    fn numeric_input_rejects_non_digit() {
+        let mut kb = KeyBar::open_numeric_input(
+            "estimate".into(),
+            String::new(),
+            InputTarget::Estimate {
+                issue_id: "strand-1".into(),
+            },
+        );
+        kb.handle_key(KeyCode::Char('a'));
+        kb.handle_key(KeyCode::Char('5'));
+        if let KeyBar::NumericInput(input) = &kb {
+            assert_eq!(input.buffer, "5");
+        } else {
+            panic!("expected NumericInput");
+        }
+    }
+
+    #[test]
+    fn numeric_input_backspace_and_esc() {
+        let mut kb = KeyBar::open_numeric_input(
+            "estimate".into(),
+            "123".into(),
+            InputTarget::Estimate {
+                issue_id: "strand-1".into(),
+            },
+        );
+        kb.handle_key(KeyCode::Backspace);
+        if let KeyBar::NumericInput(input) = &kb {
+            assert_eq!(input.buffer, "12");
+        }
+        let actions = kb.handle_key(KeyCode::Esc);
+        assert_eq!(actions.len(), 1);
+        assert!(matches!(actions[0], AppAction::CloseKeyBar));
     }
 
     #[test]

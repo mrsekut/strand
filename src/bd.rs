@@ -147,6 +147,12 @@ pub async fn update_priority(dir: Option<&str>, id: &str, priority: u8) -> Resul
     Ok(())
 }
 
+pub async fn update_estimate(dir: Option<&str>, id: &str, minutes: u32) -> Result<()> {
+    let m = minutes.to_string();
+    run_bd(dir, ["update", id, "--estimate", &m].as_slice()).await?;
+    Ok(())
+}
+
 pub async fn close_issue(dir: Option<&str>, id: &str) -> Result<()> {
     run_bd(dir, ["close", id].as_slice()).await?;
     Ok(())
@@ -256,7 +262,15 @@ pub async fn create_child(
 
 /// Quick capture: task, P2 で issue を作成し、strand-needs-enrichラベルを付与してIDを返す
 pub async fn quick_create(dir: Option<&str>, title: &str, description: &str) -> Result<String> {
-    let mut args = vec!["create", "--title", title, "--type", "task", "--priority", "2"];
+    let mut args = vec![
+        "create",
+        "--title",
+        title,
+        "--type",
+        "task",
+        "--priority",
+        "2",
+    ];
     if !description.is_empty() {
         args.extend(["--description", description]);
     }

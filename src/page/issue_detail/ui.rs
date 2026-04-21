@@ -166,6 +166,7 @@ pub fn key_hints() -> Line<'static> {
         ("q", "create"),
         ("y", "copy id"),
         ("e", "edit"),
+        ("E", "estimate"),
         ("a", "ai"),
         ("s", "status"),
         ("w", "session"),

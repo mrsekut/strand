@@ -31,6 +31,7 @@ pub fn draw(frame: &mut Frame, core: &Core, ai: &AiManagers, area: Rect) {
     let estimate_width = displayed
         .iter()
         .filter_map(|issue| issue.estimate)
+        .filter(|&e| e > 0)
         .map(|e| e.to_string().len() as u16)
         .max()
         .unwrap_or(0);
@@ -40,7 +41,11 @@ pub fn draw(frame: &mut Frame, core: &Core, ai: &AiManagers, area: Rect) {
         .map(|issue| {
             let (icon, icon_style) = epic_icon(ai, issue);
             let priority_text = issue.priority.map(|p| format!("P{p}")).unwrap_or_default();
-            let estimate_text = issue.estimate.map(|e| e.to_string()).unwrap_or_default();
+            let estimate_text = issue
+                .estimate
+                .filter(|&e| e > 0)
+                .map(|e| e.to_string())
+                .unwrap_or_default();
             Row::new(vec![
                 Cell::from(icon).style(icon_style),
                 Cell::from(bd::short_id(&issue.id).to_string())
@@ -86,6 +91,7 @@ pub fn key_hints(core: &Core) -> Line<'static> {
             ("q", "create"),
             ("y", "copy id"),
             ("p", "priority"),
+            ("E", "estimate"),
             ("a", "ai"),
             ("s", "status"),
             ("f", "filter*"),
@@ -96,6 +102,7 @@ pub fn key_hints(core: &Core) -> Line<'static> {
             ("q", "create"),
             ("y", "copy id"),
             ("p", "priority"),
+            ("E", "estimate"),
             ("a", "ai"),
             ("s", "status"),
             ("f", "filter"),

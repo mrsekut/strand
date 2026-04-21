@@ -27,6 +27,13 @@ pub fn handle_key(key: KeyCode, core: &Core) -> Vec<AppAction> {
             Some(def) => vec![AppAction::OpenSelector(def)],
             None => vec![],
         },
+        KeyCode::Char('E') => match core.issue_store.selected_issue(&core.filter) {
+            Some(issue) => vec![AppAction::OpenEstimateInput {
+                issue_id: issue.id.clone(),
+                current: issue.estimate,
+            }],
+            None => vec![],
+        },
         KeyCode::Char('f') => vec![AppAction::OpenSelector(build_filter_menu_selector())],
         KeyCode::Char('q') => vec![AppAction::QuickCreate],
         _ => vec![],
