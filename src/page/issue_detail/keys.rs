@@ -2,7 +2,7 @@ use crossterm::event::KeyCode;
 
 use crate::action::AppAction;
 use crate::core::{ConfirmAction, Core, View};
-use crate::page::issue_list::keys::{build_ai_selector, build_status_selector};
+use crate::page::issue_list::keys::{build_ai_selector, build_priority_selector, build_status_selector};
 
 pub fn handle_key(key: KeyCode, core: &Core) -> Vec<AppAction> {
     match key {
@@ -24,6 +24,10 @@ pub fn handle_key(key: KeyCode, core: &Core) -> Vec<AppAction> {
             None => vec![],
         },
         KeyCode::Char('s') => match build_status_selector(core) {
+            Some(def) => vec![AppAction::OpenSelector(def)],
+            None => vec![],
+        },
+        KeyCode::Char('p') => match build_priority_selector(core) {
             Some(def) => vec![AppAction::OpenSelector(def)],
             None => vec![],
         },

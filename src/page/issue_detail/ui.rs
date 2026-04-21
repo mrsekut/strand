@@ -169,6 +169,7 @@ pub fn key_hints() -> Line<'static> {
         ("E", "estimate"),
         ("a", "ai"),
         ("s", "status"),
+        ("p", "priority"),
         ("w", "session"),
     ])
 }
